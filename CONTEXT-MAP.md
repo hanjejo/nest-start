@@ -26,6 +26,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Inbox recording and Consumer state changes commit atomically; distributed transactions are not used.
 - PostgreSQL is the transactional store for domain data, Outbox, and Inbox; Contexts own their tables, and each Context's state change plus Outbox work stays in one transaction.
 - PostgreSQL is the only persisted application data store in v1; durable audit and failure records use append-only PostgreSQL tables, while operational logs remain structured stdout/container logs.
+- RabbitMQ is the Integration Event transport; PostgreSQL Outbox remains the canonical event record, and consumers acknowledge messages only after Inbox and state changes commit.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -43,4 +44,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 - LGTM retention, dashboards, and alert rules.
 - GitOps repository layout, environment overlays, and secret management.
+- RabbitMQ exchange, queue, retry, and Dead Letter topology.
+- Redis responsibilities and failure semantics.
 - Local runtime and infrastructure scope.
