@@ -18,6 +18,8 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Identity and Access uses email/password credentials, short-lived access tokens, refresh-token rotation, and server-side refresh sessions that can be revoked on logout.
 - Identity and Access owns roles, permissions, and assignments: `customer`, `store-operator`, `store-admin`, and `platform-admin`.
 - Store operator and store admin permissions are scoped by `Store ID`; platform admin permissions are global, and APIs authorize by permission rather than role name.
+- Ordering owns `AWAITING_PAYMENT`, `CONFIRMED`, `PREPARING`, `READY_FOR_DELIVERY`, `DELIVERING`, `COMPLETED`, and `CANCELLED`; Payment, Delivery, and Settlement own their own state machines.
+- Contexts do not duplicate one another's lifecycle state; cross-context state changes travel through integration events.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -33,7 +35,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Order, payment, settlement, and delivery state transitions.
 - Integration event envelope, versioning, and compatibility rules.
 - Outbox dispatch, inbox handling, retry, and idempotency rules.
 - Database ownership and transaction boundaries.
