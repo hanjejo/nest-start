@@ -12,6 +12,8 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Ordering references `Store ID` and product snapshots without owning Store or Catalog tables.
 - Payment owns customer charge collection; Settlement owns the store payable ledger, including fees, refunds, and adjustments.
 - Settlement becomes eligible after order completion; external bank transfers and provider settlement APIs are out of scope for v1.
+- Payment owns payment intents and payment state; a `PaymentProvider` port isolates provider adapters, with a fake provider used in v1.
+- Ordering cannot access Payment tables directly; it communicates through commands and integration events.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -27,4 +29,4 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Payment provider and delivery-provider boundaries.
+- Delivery-provider boundary.
