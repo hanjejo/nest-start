@@ -22,6 +22,8 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Contexts do not duplicate one another's lifecycle state; cross-context state changes travel through integration events.
 - Integration Event envelopes contain `eventId`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `aggregateId`, `correlationId`, `causationId`, and `payload`; Outbox stores the complete envelope.
 - Domain Events remain Context-internal; Integration Events are immutable, additive changes keep the Version, and breaking changes use a new event type or Version.
+- Aggregate changes and Outbox records commit atomically; Dispatcher delivery is at-least-once, Consumers deduplicate through Inbox records, and failed messages use exponential backoff before Dead Letter handling.
+- Inbox recording and Consumer state changes commit atomically; distributed transactions are not used.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -37,6 +39,5 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Outbox dispatch, inbox handling, retry, and idempotency rules.
 - Database ownership and transaction boundaries.
 - Local runtime and infrastructure scope.
