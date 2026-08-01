@@ -7,6 +7,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 ## Confirmed decisions
 
 - v1 supports multiple stores.
+- Each order belongs to exactly one store.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -23,6 +24,5 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 ## Still unresolved
 
 - Whether store data has its own context or belongs to Catalog.
-- Whether one order can contain products from multiple stores.
 - Settlement ownership and whether settlement means order-level accounting or merchant payout.
 - Payment provider and delivery-provider boundaries.
