@@ -2,31 +2,22 @@
 
 ## Project overview
 
-NestJS v11 backend (single service). ORM is **Drizzle** on a local **SQLite** file
-via `better-sqlite3`. There is one demo resource: `User` (`/user` CRUD) plus a
-`GET /` hello-world route.
+Nx monorepo (`@nest-start/source`) with:
 
-Standard scripts live in `package.json` (`start`, `start:dev`, `build`, `lint`,
-`test`, `test:e2e`). Standard usage is documented in `README.md`.
+- `apps/api` — NestJS v11 + Drizzle ORM + SQLite (`better-sqlite3`)
+- `apps/web` — React (Vite) frontend
+- `apps/web-e2e` — Playwright FE↔API integration tests
+
+API demo resource: `User` CRUD under `/api/user`, plus `GET /api` hello-world.
 
 ## Cursor Cloud specific instructions
 
-- **Single service, no external DB.** The database is a local SQLite file
-  (`sqlite.db` by default, override with `DATABASE_URL`). Nothing else needs to be
-  running. The file plus its `-wal`/`-shm` siblings are gitignored.
-- **Migrations auto-run on boot.** `DrizzleModule` (`src/db/drizzle.module.ts`)
-  runs the Drizzle migrator against the committed `drizzle/` folder inside its
-  provider factory, so `npm run start:dev` / tests create the `users` table
-  automatically. You do NOT need to run migrations manually before starting.
-- **Changing the schema:** edit `src/db/schema.ts`, then run `npm run db:generate`
-  to emit a new SQL migration under `drizzle/`. Commit that folder — boot-time
-  migration relies on it. `npm run db:push` is available for quick throwaway sync.
-- **npm needs `--legacy-peer-deps`.** Some Nest ecosystem peer ranges do not
-  resolve cleanly on a plain `npm install`; always install with
-  `npm install --legacy-peer-deps`.
-- **Run the app:** `npm run start:dev` (watch mode) serves on
-  `http://localhost:3000`. Quick smoke test:
-  `curl -X POST localhost:3000/user -H 'Content-Type: application/json' -d '{"name":"a","email":"a@b.c"}'`
-  then `curl localhost:3000/user`.
-- **supertest v7** requires a default import (`import request from 'supertest'`),
-  not `import * as request`.
+- **Install:** `npm install --legacy-peer-deps`
+- **Single service DB:** local SQLite (`DATABASE_URL` or `sqlite.db`). Migrations auto-run on API boot from `apps/api/drizzle/`.
+- **Schema changes:** edit `apps/api/src/db/schema.ts`, then `nx run api:db-generate`. Commit `apps/api/drizzle/`.
+- **Run API:** `npx nx serve api` → `http://localhost:3000/api`
+- **Run web:** `npx nx serve web` → `http://localhost:4200` (Vite proxies `/api` to the API)
+- **Unit tests:** `npx nx test api`, `npx nx test web`
+- **API e2e:** `npx nx run api:test-e2e`
+- **Integration (FE↔API):** `npx nx e2e web-e2e` (starts API + web, Playwright chromium)
+- **supertest v7** uses default import: `import request from 'supertest'`
