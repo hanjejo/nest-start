@@ -25,6 +25,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Aggregate changes and Outbox records commit atomically; Dispatcher delivery is at-least-once, Consumers deduplicate through Inbox records, and failed messages use exponential backoff before Dead Letter handling.
 - Inbox recording and Consumer state changes commit atomically; distributed transactions are not used.
 - PostgreSQL is the transactional store for domain data, Outbox, and Inbox; Contexts own their tables, and each Context's state change plus Outbox work stays in one transaction.
+- PostgreSQL is the only persisted application data store in v1; durable audit and failure records use append-only PostgreSQL tables, while operational logs remain structured stdout/container logs.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -40,6 +41,5 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Whether requested “logs” mean operational logs or an append-only audit trail.
-- Log retention, search, and storage target; MongoDB is not selected solely because writes are insert-only.
+- Operational log retention and collection tooling.
 - Local runtime and infrastructure scope.
