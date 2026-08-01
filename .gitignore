@@ -37,3 +37,9 @@ lerna-debug.log*
 .env
 package-lock.json
 .vscode/launch.json
+
+# SQLite (local dev database)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite

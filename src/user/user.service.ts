@@ -1,33 +1,54 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from 'src/prisma.service';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
+import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
+import { users } from '../db/schema';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
-  create(createUserDto: Prisma.UserCreateInput) {
-    return this.prisma.user.create({
-      data: createUserDto,
-    });
+  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+
+  async create(createUserDto: CreateUserDto) {
+    const [user] = await this.db
+      .insert(users)
+      .values(createUserDto)
+      .returning();
+    return user;
   }
 
-  findAll() {
-    return `This action returns all user`;
+  async findAll() {
+    return this.db.select().from(users);
   }
 
-  findOne(id: string): Promise<Prisma.UserFindUniqueArgs | null> {
-    return this.prisma.user.findUnique({
-      where: {
-        id: id,
-      },
-    });
+  async findOne(id: string) {
+    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+    return user;
   }
 
-  update(id: string, updateUserDto: Prisma.UserUpdateInput) {
-    return `This action updates a #${id} user`;
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    const [user] = await this.db
+      .update(users)
+      .set(updateUserDto)
+      .where(eq(users.id, id))
+      .returning();
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+    return user;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async remove(id: string) {
+    const [user] = await this.db
+      .delete(users)
+      .where(eq(users.id, id))
+      .returning();
+    if (!user) {
+      throw new NotFoundException(`User ${id} not found`);
+    }
+    return user;
   }
 }
