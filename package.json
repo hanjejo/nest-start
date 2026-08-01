@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
+  "packageManager": "pnpm@10.33.3",
   "scripts": {
     "api:serve": "nx serve api",
     "web:serve": "nx serve web",
@@ -80,5 +81,16 @@
     "webpack": "^5.101.3",
     "webpack-cli": "^7.0.0",
     "webpack-dev-server": "^5.2.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@parcel/watcher",
+      "@swc/core",
+      "better-sqlite3",
+      "esbuild",
+      "nx",
+      "unrs-resolver"
+    ]
   }
 }
