@@ -41,5 +41,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Operational log retention and collection tooling.
+- LGTM retention, dashboards, and alert rules.
+- GitOps repository layout, environment overlays, and secret management.
 - Local runtime and infrastructure scope.
