@@ -10,6 +10,20 @@ Nx monorepo (`@nest-start/source`) with:
 
 API demo resource: `User` CRUD under `/api/user`, plus `GET /api` hello-world.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a multi-context layout with root `CONTEXT-MAP.md` and one `CONTEXT.md` per context. See `docs/agents/domain.md`.
+
 ## Cursor Cloud specific instructions
 
 - **Install:** `pnpm install`
