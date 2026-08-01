@@ -10,6 +10,8 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Each order belongs to exactly one store.
 - Store Management owns stores, operating status, hours, and store policies; Catalog owns products, prices, and menu visibility.
 - Ordering references `Store ID` and product snapshots without owning Store or Catalog tables.
+- Payment owns customer charge collection; Settlement owns the store payable ledger, including fees, refunds, and adjustments.
+- Settlement becomes eligible after order completion; external bank transfers and provider settlement APIs are out of scope for v1.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -25,5 +27,4 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Settlement ownership and whether settlement means order-level accounting or merchant payout.
 - Payment provider and delivery-provider boundaries.
