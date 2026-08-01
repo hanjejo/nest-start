@@ -14,6 +14,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Settlement becomes eligible after order completion; external bank transfers and provider settlement APIs are out of scope for v1.
 - Payment owns payment intents and payment state; a `PaymentProvider` port isolates provider adapters, with a fake provider used in v1.
 - Ordering cannot access Payment tables directly; it communicates through commands and integration events.
+- Delivery owns one delivery per order, including the address snapshot and delivery state; v1 uses manual or simulated status changes behind a `DeliveryProvider` port.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -29,4 +30,10 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Delivery-provider boundary.
+- Authentication token and session model.
+- Roles, permissions, and authorization ownership.
+- Order, payment, settlement, and delivery state transitions.
+- Integration event envelope, versioning, and compatibility rules.
+- Outbox dispatch, inbox handling, retry, and idempotency rules.
+- Database ownership and transaction boundaries.
+- Local runtime and infrastructure scope.
