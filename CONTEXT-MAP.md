@@ -15,6 +15,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Payment owns payment intents and payment state; a `PaymentProvider` port isolates provider adapters, with a fake provider used in v1.
 - Ordering cannot access Payment tables directly; it communicates through commands and integration events.
 - Delivery owns one delivery per order, including the address snapshot and delivery state; v1 uses manual or simulated status changes behind a `DeliveryProvider` port.
+- Identity and Access uses email/password credentials, short-lived access tokens, refresh-token rotation, and server-side refresh sessions that can be revoked on logout.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -30,7 +31,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Authentication token and session model.
 - Roles, permissions, and authorization ownership.
 - Order, payment, settlement, and delivery state transitions.
 - Integration event envelope, versioning, and compatibility rules.
