@@ -13,7 +13,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 | Candidate context   | Context document                              | Status    |
 | ------------------- | --------------------------------------------- | --------- |
 | Identity and Access | `apps/api/src/identity-and-access/CONTEXT.md` | Candidate |
-| Store Management    | `apps/api/src/store-management/CONTEXT.md`   | Candidate |
+| Store Management    | `apps/api/src/store-management/CONTEXT.md`    | Candidate |
 | Catalog             | `apps/api/src/catalog/CONTEXT.md`             | Candidate |
 | Ordering            | `apps/api/src/ordering/CONTEXT.md`            | Candidate |
 | Settlement          | `apps/api/src/settlement/CONTEXT.md`          | Candidate |
