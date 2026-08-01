@@ -20,6 +20,8 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Store operator and store admin permissions are scoped by `Store ID`; platform admin permissions are global, and APIs authorize by permission rather than role name.
 - Ordering owns `AWAITING_PAYMENT`, `CONFIRMED`, `PREPARING`, `READY_FOR_DELIVERY`, `DELIVERING`, `COMPLETED`, and `CANCELLED`; Payment, Delivery, and Settlement own their own state machines.
 - Contexts do not duplicate one another's lifecycle state; cross-context state changes travel through integration events.
+- Integration Event envelopes contain `eventId`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `aggregateId`, `correlationId`, `causationId`, and `payload`; Outbox stores the complete envelope.
+- Domain Events remain Context-internal; Integration Events are immutable, additive changes keep the Version, and breaking changes use a new event type or Version.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
@@ -35,7 +37,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Integration event envelope, versioning, and compatibility rules.
 - Outbox dispatch, inbox handling, retry, and idempotency rules.
 - Database ownership and transaction boundaries.
 - Local runtime and infrastructure scope.
