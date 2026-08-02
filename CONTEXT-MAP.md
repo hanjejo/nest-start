@@ -70,6 +70,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - [State Models](./docs/domain/state-models.md)
 - [Integration Event Catalog](./docs/domain/event-catalog.md)
 - [Domain Workflows](./docs/domain/workflows.md)
+- [Production Readiness Contract](./docs/operations/production-readiness.md)
 
 ## Still unresolved
 

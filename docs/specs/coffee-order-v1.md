@@ -177,6 +177,12 @@ Tests verify external behavior and recovery guarantees, not internal implementat
 - Kubernetes smoke tests verify Service DNS, Readiness/Liveness Probes, Argo CD reconciliation, Secret decryption, and dependency startup.
 - Existing Vitest tests remain the prior art for API behavior; Playwright remains the prior art for browser-to-API integration.
 
+## Production Readiness
+
+Seam-level tests are necessary but not sufficient. Every Ticket must demonstrate functional behavior, failure recovery, security boundaries, structured observability, health behavior, deployability, rollback, and relevant backup or restore behavior. The shared checklist and operational expectations live in `docs/operations/production-readiness.md`.
+
+Before production claims, the service must measure HTTP, Order, PaymentWorkflow, DeliveryWorkflow, SettlementWorkflow, Outbox, RabbitMQ, Inbox, PostgreSQL, Redis, and DBOS health. Target SLO, RTO, and RPO values are release decisions and must not remain implicit.
+
 ## Out of Scope
 
 - MongoDB
