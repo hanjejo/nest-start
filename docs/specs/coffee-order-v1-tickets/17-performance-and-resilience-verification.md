@@ -11,4 +11,6 @@
 - [ ] PostgreSQL, RabbitMQ, Redis, provider, and DBOS failure scenarios are exercised.
 - [ ] Pod restart and consumer crash recovery are verified.
 - [ ] Duplicate events and retries do not duplicate business effects.
+- [ ] Synchronous API p95 stays at or below 300 ms excluding provider wait.
+- [ ] Asynchronous workflow p95 stays at or below 30 seconds when no provider action is required.
 - [ ] SLO thresholds and alert limits are recorded from observed behavior.

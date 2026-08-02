@@ -11,4 +11,5 @@
 - [ ] Restore is tested against a clean PostgreSQL environment.
 - [ ] Restore verification covers schema, Orders, Payment, Outbox, Inbox, Audit, and Failure records.
 - [ ] Recovery procedure explains consumer pause, Outbox replay, duplicate handling, and DBOS workflow resume.
-- [ ] RTO and RPO values are recorded before release sign-off.
+- [ ] Recovery meets the v1 RPO of at most 15 minutes.
+- [ ] Recovery meets the v1 RTO of 60 minutes or less.

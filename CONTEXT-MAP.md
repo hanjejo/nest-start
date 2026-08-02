@@ -33,6 +33,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - Kubernetes `Service` and CoreDNS provide Service Discovery; internal dependencies use `ClusterIP` DNS, external HTTP uses Ingress or Gateway, and every workload defines Readiness and Liveness Probes.
 - GitOps desired state lives in this Nx repository under `deploy/k8s`, with shared `base` manifests and `local`, `staging`, and `production` overlays; Argo CD watches an environment overlay, and promotion happens through Git changes.
 - LGTM observes HTTP, RabbitMQ, database, and provider calls; metrics cover API health, queue backlog, Outbox/DLQ, PostgreSQL, and Redis, while structured logs carry trace and correlation identifiers with seven-day local retention.
+- v1 operational targets are 99.9% monthly API availability, synchronous API p95 at or below 300 ms excluding provider wait, asynchronous workflow p95 at or below 30 seconds without provider action, RPO at most 15 minutes, and RTO within 60 minutes.
 - OpenTelemetry SDK and instrumentation provide telemetry, while Pino emits structured JSON logs with trace and correlation context to stdout for Collector export into LGTM.
 - DBOS provides PostgreSQL-backed durable execution for `PaymentWorkflow`, `DeliveryWorkflow`, and `SettlementWorkflow`; it does not replace normal Aggregate transactions, Outbox/Inbox, or RabbitMQ.
 - Docker Compose supports fast local application development; `kind` runs the full Kubernetes integration stack, and Terraform AWS follows after the application specification is stable.

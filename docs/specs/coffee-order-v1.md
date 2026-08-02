@@ -181,7 +181,7 @@ Tests verify external behavior and recovery guarantees, not internal implementat
 
 Seam-level tests are necessary but not sufficient. Every Ticket must demonstrate functional behavior, failure recovery, security boundaries, structured observability, health behavior, deployability, rollback, and relevant backup or restore behavior. The shared checklist and operational expectations live in `docs/operations/production-readiness.md`.
 
-Before production claims, the service must measure HTTP, Order, PaymentWorkflow, DeliveryWorkflow, SettlementWorkflow, Outbox, RabbitMQ, Inbox, PostgreSQL, Redis, and DBOS health. Target SLO, RTO, and RPO values are release decisions and must not remain implicit.
+Before production claims, the service must measure HTTP, Order, PaymentWorkflow, DeliveryWorkflow, SettlementWorkflow, Outbox, RabbitMQ, Inbox, PostgreSQL, Redis, and DBOS health. v1 targets are 99.9% monthly API availability, synchronous API p95 at or below 300 ms excluding provider wait, asynchronous workflow p95 at or below 30 seconds when no provider action is required, RPO at most 15 minutes, and RTO within 60 minutes. Local Compose and `kind` validate behavior but do not claim production SLA compliance.
 
 ## Out of Scope
 

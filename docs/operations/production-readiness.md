@@ -36,6 +36,16 @@ The implementation must measure these indicators before production claims are ma
 
 Target SLO, RTO, and RPO values remain explicit release decisions rather than implicit assumptions.
 
+## v1 targets
+
+- API availability: 99.9% per calendar month in the target production environment.
+- Synchronous API latency: p95 at or below 300 ms, excluding external provider wait time.
+- Asynchronous workflow completion: p95 at or below 30 seconds for work that does not require provider action.
+- Recovery Point Objective: at most 15 minutes of accepted data loss.
+- Recovery Time Objective: service restored within 60 minutes after a declared outage.
+
+These targets are measured in the deployed target environment. Local Compose and `kind` validate behavior and recovery procedures; they do not claim production SLA compliance.
+
 ## Data protection and recovery
 
 - PostgreSQL uses WAL/PITR-capable backup configuration for the target environment.
