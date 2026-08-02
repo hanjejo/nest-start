@@ -9,9 +9,6 @@ module.exports = {
       devtoolModuleFilenameTemplate: '[absolute-resource-path]',
     }),
   },
-  externals: {
-    'better-sqlite3': 'commonjs better-sqlite3',
-  },
   plugins: [
     new NxAppWebpackPlugin({
       target: 'node',
