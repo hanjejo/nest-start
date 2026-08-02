@@ -12,6 +12,7 @@ import { UserModule } from '../user/user.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { PaymentModule } from '../payment/payment.module';
 import { DeliveryModule } from '../delivery/delivery.module';
+import { SettlementModule } from '../settlement/settlement.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
     MessagingModule,
     PaymentModule,
     DeliveryModule,
+    SettlementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
