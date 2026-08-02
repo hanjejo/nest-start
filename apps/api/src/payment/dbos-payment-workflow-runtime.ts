@@ -2,6 +2,10 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { Pool } from 'pg';
 import { PaymentWorkflowEngine } from './payment-workflow.engine';
 import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import {
   PAYMENT_WORKFLOW_NAME,
   PAYMENT_WORKFLOW_QUEUE,
   PaymentWorkflowHandle,
@@ -23,13 +27,17 @@ export class DbosPaymentWorkflowRuntime implements PaymentWorkflowRuntime {
   ) {
     this.registeredWorkflow = DBOS.registerWorkflow(
       async (input: PaymentWorkflowInput) =>
-        this.engine.run(input, (name, work) =>
-          DBOS.runStep(work, {
-            name,
-            retriesAllowed: name.startsWith('charge-payment-attempt'),
-            maxAttempts: 3,
-            intervalSeconds: 1,
-          }),
+        runWithCorrelationContext(
+          withCorrelationContext(input.correlationId, input.causationId),
+          () =>
+            this.engine.run(input, (name, work) =>
+              DBOS.runStep(work, {
+                name,
+                retriesAllowed: name.startsWith('charge-payment-attempt'),
+                maxAttempts: 3,
+                intervalSeconds: 1,
+              }),
+            ),
         ),
       { name: PAYMENT_WORKFLOW_NAME },
     );

@@ -19,9 +19,11 @@ import { PerformanceStorePort } from './performance.types';
 import { RedisPerformanceAdapter } from './redis-performance.adapter';
 import { RateLimitGuard } from './rate-limit.guard';
 import { ResilientPerformanceStore } from './resilient-performance.store';
+import { MetricsService } from '../observability/metrics.service';
 
 export function createPerformanceStore(
   config: PerformanceConfig = loadPerformanceConfig(),
+  metrics?: MetricsService,
 ): PerformanceStorePort {
   const fallback = new InMemoryPerformanceAdapter();
   const primary = config.redisUrl
@@ -32,7 +34,7 @@ export function createPerformanceStore(
       })
     : undefined;
 
-  return new ResilientPerformanceStore(primary, fallback, config);
+  return new ResilientPerformanceStore(primary, fallback, config, metrics);
 }
 
 @Injectable()
@@ -57,7 +59,7 @@ class PerformanceLifecycle implements OnApplicationShutdown {
     {
       provide: PERFORMANCE_STORE,
       useFactory: createPerformanceStore,
-      inject: [PERFORMANCE_CONFIG],
+      inject: [PERFORMANCE_CONFIG, MetricsService],
     },
     {
       provide: CATALOG_CACHE,

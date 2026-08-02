@@ -5,6 +5,8 @@ import {
   PerformanceHealth,
   PerformanceStorePort,
 } from '../performance/performance.types';
+import { MetricsService } from '../observability/metrics.service';
+import { TelemetryStatusService } from '../observability/telemetry';
 
 export type HealthResponse = {
   status: 'ok' | 'degraded' | 'error';
@@ -26,6 +28,8 @@ export class HealthService {
     private readonly databaseService: DatabaseService,
     @Inject(PERFORMANCE_STORE)
     private readonly performanceStore: PerformanceStorePort,
+    private readonly telemetryStatus: TelemetryStatusService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async check(): Promise<HealthResponse> {
@@ -38,13 +42,37 @@ export class HealthService {
         }),
       ),
     ]);
+    const observability = this.telemetryStatus.health();
+    const status = !databaseIsHealthy
+      ? 'error'
+      : redis.status === 'up'
+        ? 'ok'
+        : 'degraded';
+
+    this.metrics.setHealth('database', databaseIsHealthy ? 'up' : 'down');
+    this.metrics.setHealth(
+      'redis',
+      redis.status === 'up'
+        ? 'up'
+        : redis.status === 'disabled'
+          ? 'disabled'
+          : 'degraded',
+    );
+    this.metrics.setHealth(
+      'observability',
+      observability.status === 'up'
+        ? 'up'
+        : observability.status === 'disabled'
+          ? 'disabled'
+          : 'degraded',
+    );
+    this.metrics.setHealth(
+      'api',
+      status === 'ok' ? 'up' : status === 'error' ? 'down' : 'degraded',
+    );
 
     return {
-      status: !databaseIsHealthy
-        ? 'error'
-        : redis.status === 'up'
-          ? 'ok'
-          : 'degraded',
+      status,
       application: {
         status: 'up',
       },

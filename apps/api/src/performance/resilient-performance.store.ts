@@ -5,6 +5,7 @@ import {
   PerformanceHealth,
   PerformanceStorePort,
 } from './performance.types';
+import { MetricsService } from '../observability/metrics.service';
 
 export class ResilientPerformanceStore implements PerformanceStorePort {
   private unavailableUntil = 0;
@@ -17,6 +18,7 @@ export class ResilientPerformanceStore implements PerformanceStorePort {
       PerformanceConfig,
       'redisOperationTimeoutMs' | 'redisRetryCooldownMs'
     >,
+    private readonly metrics?: MetricsService,
   ) {}
 
   async get(key: string): Promise<string | null> {
@@ -72,21 +74,25 @@ export class ResilientPerformanceStore implements PerformanceStorePort {
   async health(): Promise<PerformanceHealth> {
     const primary = this.primary;
     if (!primary) {
+      this.metrics?.setRedisHealth('disabled');
       return { status: 'disabled', mode: 'memory' };
     }
     if (Date.now() < this.unavailableUntil) {
+      this.metrics?.setRedisHealth('degraded');
       return { status: 'unavailable', mode: 'memory' };
     }
 
     try {
       const health = await this.withTimeout(() => primary.health());
       if (health.status === 'up') {
+        this.metrics?.setRedisHealth('up');
         return { status: 'up', mode: 'redis' };
       }
     } catch {
       // Fall through to the documented degraded response.
     }
     this.markUnavailable();
+    this.metrics?.setRedisHealth('degraded');
     return { status: 'unavailable', mode: 'memory' };
   }
 
@@ -101,13 +107,18 @@ export class ResilientPerformanceStore implements PerformanceStorePort {
   ): Promise<T> {
     const primary = this.primary;
     if (!primary || Date.now() < this.unavailableUntil) {
+      this.metrics?.recordRedisFallback();
       return fallbackOperation();
     }
 
     try {
-      return await this.withTimeout(() => operation(primary));
+      const result = await this.withTimeout(() => operation(primary));
+      this.metrics?.recordRedisHit();
+      return result;
     } catch {
       this.markUnavailable();
+      this.metrics?.recordRedisError();
+      this.metrics?.recordRedisFallback();
       return fallbackOperation();
     }
   }

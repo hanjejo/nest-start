@@ -2,6 +2,10 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { Pool } from 'pg';
 import { SettlementWorkflowEngine } from './settlement-workflow.engine';
 import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import {
   SETTLEMENT_WORKFLOW_NAME,
   SETTLEMENT_WORKFLOW_QUEUE,
   SettlementWorkflowHandle,
@@ -30,13 +34,17 @@ export class DbosSettlementWorkflowRuntime
   ) {
     this.registeredWorkflow = DBOS.registerWorkflow(
       async (input: SettlementWorkflowInput) =>
-        this.engine.run(input, (name, work) =>
-          DBOS.runStep(work, {
-            name,
-            retriesAllowed: name === 'record-settlement-ledger',
-            maxAttempts: 3,
-            intervalSeconds: 1,
-          }),
+        runWithCorrelationContext(
+          withCorrelationContext(input.correlationId, input.causationId),
+          () =>
+            this.engine.run(input, (name, work) =>
+              DBOS.runStep(work, {
+                name,
+                retriesAllowed: name === 'record-settlement-ledger',
+                maxAttempts: 3,
+                intervalSeconds: 1,
+              }),
+            ),
         ),
       { name: SETTLEMENT_WORKFLOW_NAME },
     );

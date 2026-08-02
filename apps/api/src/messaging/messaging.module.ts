@@ -7,13 +7,14 @@ import { OutboxDispatcher } from './outbox-dispatcher.service';
 import { OutboxService } from './outbox.service';
 import { RabbitMqIntegrationEventTransport } from './rabbitmq.transport';
 import { IntegrationEventConsumerService } from './integration-event-consumer.service';
+import { MetricsService } from '../observability/metrics.service';
 
-function createTransport(): IntegrationEventTransport {
+function createTransport(metrics: MetricsService): IntegrationEventTransport {
   const url = process.env.RABBITMQ_URL?.trim();
   if (!url) {
-    return new InMemoryIntegrationEventTransport();
+    return new InMemoryIntegrationEventTransport({}, metrics);
   }
-  return new RabbitMqIntegrationEventTransport({ url });
+  return new RabbitMqIntegrationEventTransport({ url }, metrics);
 }
 
 @Global()
@@ -22,6 +23,7 @@ function createTransport(): IntegrationEventTransport {
     {
       provide: INTEGRATION_EVENT_TRANSPORT,
       useFactory: createTransport,
+      inject: [MetricsService],
     },
     OutboxService,
     OutboxDispatcher,

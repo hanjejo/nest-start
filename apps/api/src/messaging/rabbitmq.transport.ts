@@ -18,6 +18,11 @@ import {
   IntegrationEventSubscription,
   IntegrationEventTransport,
 } from './messaging.transport';
+import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import { MetricsService } from '../observability/metrics.service';
 
 export type RabbitMqTransportOptions = Readonly<{
   url: string;
@@ -48,7 +53,10 @@ export class RabbitMqIntegrationEventTransport
   private channel: Channel | undefined;
   private readonly retryPolicy: RetryPolicy;
 
-  constructor(private readonly options: RabbitMqTransportOptions) {
+  constructor(
+    private readonly options: RabbitMqTransportOptions,
+    private readonly metrics?: MetricsService,
+  ) {
     if (!options.url.trim()) {
       throw new TypeError('RabbitMQ URL is required');
     }
@@ -59,8 +67,13 @@ export class RabbitMqIntegrationEventTransport
     if (this.channel) {
       return;
     }
-    this.connection = await amqp.connect(this.options.url);
-    this.channel = await this.connection.createChannel();
+    try {
+      this.connection = await amqp.connect(this.options.url);
+      this.channel = await this.connection.createChannel();
+    } catch (error) {
+      this.metrics?.recordRabbitFailure('connect');
+      throw error;
+    }
   }
 
   async ensureTopology(topology: IntegrationEventTopology): Promise<void> {
@@ -68,18 +81,31 @@ export class RabbitMqIntegrationEventTransport
     await channel.assertExchange(topology.exchange, 'topic', {
       durable: true,
     });
-    await channel.assertQueue(topology.queue, {
+    const queueInfo = await channel.assertQueue(topology.queue, {
       durable: true,
     });
-    await channel.assertQueue(topology.deadLetterQueue, {
-      durable: true,
-    });
+    this.metrics?.setRabbitBacklog(
+      topology.queue,
+      queueInfo.messageCount,
+      'rabbitmq',
+    );
+    const deadLetterQueueInfo = await channel.assertQueue(
+      topology.deadLetterQueue,
+      {
+        durable: true,
+      },
+    );
+    this.metrics?.setRabbitBacklog(
+      topology.deadLetterQueue,
+      deadLetterQueueInfo.messageCount,
+      'rabbitmq',
+    );
     for (const eventType of topology.eventTypes) {
       await channel.bindQueue(topology.queue, topology.exchange, eventType);
     }
 
     for (const [index, queue] of topology.retryQueues.entries()) {
-      await channel.assertQueue(queue, {
+      const retryQueueInfo = await channel.assertQueue(queue, {
         durable: true,
         arguments: {
           'x-message-ttl': Math.max(
@@ -89,32 +115,48 @@ export class RabbitMqIntegrationEventTransport
           'x-dead-letter-exchange': topology.exchange,
         },
       });
+      this.metrics?.setRabbitBacklog(
+        queue,
+        retryQueueInfo.messageCount,
+        'rabbitmq',
+      );
     }
   }
 
   async publish(event: IntegrationEventEnvelope): Promise<void> {
-    const channel = await this.requireChannel();
-    await channel.assertExchange(INTEGRATION_EVENTS_EXCHANGE, 'topic', {
-      durable: true,
-    });
-    await this.publishBuffer(
-      channel,
-      channel.publish(
-        INTEGRATION_EVENTS_EXCHANGE,
-        event.eventType,
-        Buffer.from(eventToJson(event)),
-        {
-          persistent: true,
-          contentType: 'application/json',
-          messageId: event.eventId,
-          type: event.eventType,
-          headers: {
-            'x-event-version': event.eventVersion,
-            'x-idempotency-key': event.idempotencyKey,
+    try {
+      const channel = await this.requireChannel();
+      await channel.assertExchange(INTEGRATION_EVENTS_EXCHANGE, 'topic', {
+        durable: true,
+      });
+      await this.publishBuffer(
+        channel,
+        channel.publish(
+          INTEGRATION_EVENTS_EXCHANGE,
+          event.eventType,
+          Buffer.from(eventToJson(event)),
+          {
+            persistent: true,
+            contentType: 'application/json',
+            messageId: event.eventId,
+            type: event.eventType,
+            headers: {
+              'x-event-version': event.eventVersion,
+              'x-idempotency-key': event.idempotencyKey,
+              'x-correlation-id': event.correlationId,
+              ...(event.causationId
+                ? { 'x-causation-id': event.causationId }
+                : {}),
+            },
           },
-        },
-      ),
-    );
+        ),
+      );
+      this.metrics?.recordRabbitPublish('success');
+    } catch (error) {
+      this.metrics?.recordRabbitPublish('failure');
+      this.metrics?.recordRabbitFailure('publish');
+      throw error;
+    }
   }
 
   async consume(
@@ -127,9 +169,14 @@ export class RabbitMqIntegrationEventTransport
       if (!message) {
         return;
       }
-      void this.handleMessage(message, options).catch(() => {
-        // Leave the message unacknowledged so RabbitMQ can redeliver it.
-      });
+      void this.handleMessage(message, options)
+        .catch(() => {
+          this.metrics?.recordRabbitConsumer('failure');
+          // Leave the message unacknowledged so RabbitMQ can redeliver it.
+        })
+        .finally(() => {
+          void this.refreshBacklog(channel, options.topology.queue);
+        });
     });
 
     return {
@@ -140,9 +187,14 @@ export class RabbitMqIntegrationEventTransport
   }
 
   async acknowledge(delivery: IntegrationEventDelivery): Promise<void> {
-    const { message } = rabbitDelivery(delivery);
-    const channel = await this.requireChannel();
-    channel.ack(message);
+    try {
+      const { message } = rabbitDelivery(delivery);
+      const channel = await this.requireChannel();
+      channel.ack(message);
+    } catch (error) {
+      this.metrics?.recordRabbitFailure('acknowledge');
+      throw error;
+    }
   }
 
   async retry(
@@ -150,46 +202,60 @@ export class RabbitMqIntegrationEventTransport
     _delayMs: number,
     attempt: number,
   ): Promise<void> {
-    const { message, topology } = rabbitDelivery(delivery);
-    const channel = await this.requireChannel();
-    const retryQueue =
-      topology.retryQueues[
-        Math.min(Math.max(attempt - 1, 0), topology.retryQueues.length - 1)
-      ];
-    await this.publishBuffer(
-      channel,
-      channel.sendToQueue(retryQueue, message.content, {
-        persistent: true,
-        contentType: message.properties.contentType ?? 'application/json',
-        type: message.properties.type,
-        messageId: message.properties.messageId,
-        headers: {
-          ...message.properties.headers,
-          'x-retry-attempt': attempt + 1,
-        },
-      }),
-    );
+    try {
+      const { message, topology } = rabbitDelivery(delivery);
+      const channel = await this.requireChannel();
+      const retryQueue =
+        topology.retryQueues[
+          Math.min(Math.max(attempt - 1, 0), topology.retryQueues.length - 1)
+        ];
+      await this.publishBuffer(
+        channel,
+        channel.sendToQueue(retryQueue, message.content, {
+          persistent: true,
+          contentType: message.properties.contentType ?? 'application/json',
+          type: message.properties.type,
+          messageId: message.properties.messageId,
+          headers: {
+            ...message.properties.headers,
+            'x-retry-attempt': attempt + 1,
+          },
+        }),
+      );
+      this.metrics?.recordRabbitRetry();
+      await this.refreshBacklog(channel, retryQueue);
+    } catch (error) {
+      this.metrics?.recordRabbitFailure('retry');
+      throw error;
+    }
   }
 
   async deadLetter(
     delivery: IntegrationEventDelivery,
     reason: string,
   ): Promise<void> {
-    const { message, topology } = rabbitDelivery(delivery);
-    const channel = await this.requireChannel();
-    await this.publishBuffer(
-      channel,
-      channel.sendToQueue(topology.deadLetterQueue, message.content, {
-        persistent: true,
-        contentType: message.properties.contentType ?? 'application/json',
-        type: message.properties.type,
-        messageId: message.properties.messageId,
-        headers: {
-          ...message.properties.headers,
-          'x-dead-letter-reason': reason,
-        },
-      }),
-    );
+    try {
+      const { message, topology } = rabbitDelivery(delivery);
+      const channel = await this.requireChannel();
+      await this.publishBuffer(
+        channel,
+        channel.sendToQueue(topology.deadLetterQueue, message.content, {
+          persistent: true,
+          contentType: message.properties.contentType ?? 'application/json',
+          type: message.properties.type,
+          messageId: message.properties.messageId,
+          headers: {
+            ...message.properties.headers,
+            'x-dead-letter-reason': reason,
+          },
+        }),
+      );
+      this.metrics?.recordRabbitDeadLetter();
+      await this.refreshBacklog(channel, topology.deadLetterQueue);
+    } catch (error) {
+      this.metrics?.recordRabbitFailure('dead_letter');
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
@@ -217,7 +283,10 @@ export class RabbitMqIntegrationEventTransport
           },
         }),
       );
+      this.metrics?.recordRabbitDeadLetter();
+      await this.refreshBacklog(channel, options.topology.deadLetterQueue);
       channel.ack(message);
+      this.metrics?.recordRabbitConsumer('failure');
       return;
     }
 
@@ -233,7 +302,23 @@ export class RabbitMqIntegrationEventTransport
       redelivered: message.fields.redelivered,
       raw: Object.freeze({ message, topology: options.topology }),
     });
-    await options.handler(delivery);
+    await runWithCorrelationContext(
+      withCorrelationContext(event.correlationId, event.causationId),
+      () => options.handler(delivery),
+    );
+    this.metrics?.recordRabbitConsumer('success');
+  }
+
+  private async refreshBacklog(channel: Channel, queue: string): Promise<void> {
+    if (!this.metrics) {
+      return;
+    }
+    try {
+      const queueInfo = await channel.checkQueue(queue);
+      this.metrics.setRabbitBacklog(queue, queueInfo.messageCount, 'rabbitmq');
+    } catch {
+      this.metrics.recordRabbitFailure('backlog');
+    }
   }
 
   private async requireChannel(): Promise<Channel> {

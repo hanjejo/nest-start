@@ -9,6 +9,7 @@ import {
   SettlementWorkflowResult,
   SettlementWorkflowStep,
 } from './settlement-workflow.types';
+import { withSpan } from '../observability/tracing';
 
 function directStep<T>(_name: string, work: () => Promise<T>): Promise<T> {
   return work();
@@ -21,6 +22,15 @@ export class SettlementWorkflowEngine {
   async run(
     input: SettlementWorkflowInput,
     step: SettlementWorkflowStep = directStep,
+  ): Promise<SettlementWorkflowResult> {
+    return withSpan('workflow.settlement.run', () =>
+      this.runInternal(input, step),
+    );
+  }
+
+  private async runInternal(
+    input: SettlementWorkflowInput,
+    step: SettlementWorkflowStep,
   ): Promise<SettlementWorkflowResult> {
     const initial = await step('load-settlement', () =>
       this.settlementRepository.getSettlement(input.settlementId),

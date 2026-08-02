@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { OutboxEvent } from '../db/schema';
 import {
   IntegrationEventEnvelope,
@@ -11,6 +11,11 @@ import {
 } from './messaging.constants';
 import { IntegrationEventTransport } from './messaging.transport';
 import { OutboxService } from './outbox.service';
+import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import { MetricsService } from '../observability/metrics.service';
 
 export type OutboxDispatchResult = Readonly<{
   attempted: number;
@@ -42,6 +47,7 @@ export class OutboxDispatcher {
     private readonly outboxService: OutboxService,
     @Inject(INTEGRATION_EVENT_TRANSPORT)
     private readonly transport: IntegrationEventTransport,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async dispatch(
@@ -55,8 +61,18 @@ export class OutboxDispatcher {
 
     for (const event of events) {
       try {
-        await this.transport.publish(toEnvelope(event));
-        await this.outboxService.markPublished(event.eventId);
+        const envelope = toEnvelope(event);
+        await runWithCorrelationContext(
+          withCorrelationContext(
+            envelope.correlationId,
+            envelope.causationId,
+          ),
+          async () => {
+            await this.transport.publish(envelope);
+            await this.outboxService.markPublished(event.eventId);
+          },
+        );
+        this.metrics?.recordOutboxPublished();
         published += 1;
       } catch (error) {
         failed += 1;

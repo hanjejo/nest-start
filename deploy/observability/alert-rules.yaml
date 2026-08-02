@@ -1,0 +1,136 @@
+groups:
+  - name: coffee-order-api
+    interval: 1m
+    rules:
+      - alert: CoffeeOrderHighHttpErrorRate
+        expr: |
+          sum(rate(coffee_order_http_errors_total[5m]))
+            / clamp_min(sum(rate(coffee_order_http_requests_total[5m])), 1) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order API error rate is elevated
+          description: More than five percent of API requests returned server errors for ten minutes.
+
+      - alert: CoffeeOrderHighHttpLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(coffee_order_http_request_duration_seconds_bucket[5m]))
+          ) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order API p95 latency is above target
+          description: API p95 latency is above 300ms for ten minutes.
+
+      - alert: CoffeeOrderOutboxBacklog
+        expr: coffee_order_outbox_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order Outbox backlog is growing
+          description: More than 100 observable Outbox events are pending.
+
+      - alert: CoffeeOrderOutboxAge
+        expr: coffee_order_outbox_oldest_age_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order Outbox has an old event
+          description: The oldest observable Outbox event is older than five minutes.
+
+      - alert: CoffeeOrderTransportBacklog
+        expr: coffee_order_rabbitmq_backlog > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order transport backlog is growing
+          description: RabbitMQ or the in-memory transport has more than 100 observable pending deliveries.
+
+      - alert: CoffeeOrderTransportRetries
+        expr: increase(coffee_order_rabbitmq_retries_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order transport retries detected
+          description: At least one Integration Event was handed off to retry handling in the last ten minutes.
+
+      - alert: CoffeeOrderTransportDeadLetters
+        expr: increase(coffee_order_rabbitmq_dead_letters_total[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Coffee Order transport Dead Letters detected
+          description: At least one Integration Event was handed off to a Dead Letter queue in the last ten minutes.
+
+      - alert: CoffeeOrderInboxDeadLetters
+        expr: increase(coffee_order_inbox_processing_total{status="DEAD_LETTERED"}[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Coffee Order Inbox dead-lettered an event
+          description: An Integration Event exceeded its Inbox retry policy.
+
+      - alert: CoffeeOrderInboxDuplicates
+        expr: increase(coffee_order_inbox_processing_total{status="DUPLICATE"}[10m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: Coffee Order Inbox duplicate delivery detected
+          description: At least one duplicate Integration Event was observed in the last ten minutes.
+
+      - alert: CoffeeOrderDependencyUnhealthy
+        expr: coffee_order_health_status{component=~"postgresql|redis",status!="up"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order dependency health is degraded
+          description: PostgreSQL or Redis health is not reporting an up state.
+
+      - alert: CoffeeOrderPostgresqlMigrationFailed
+        expr: coffee_order_postgresql_migration_status{status="failed"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Coffee Order PostgreSQL migration failed
+          description: The API did not complete its boot-time PostgreSQL migrations.
+
+      - alert: CoffeeOrderPostgresqlTransactionFailures
+        expr: increase(coffee_order_postgresql_transaction_failures_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order PostgreSQL transaction failures detected
+          description: At least one PostgreSQL transaction failed in the last ten minutes.
+
+      - alert: CoffeeOrderRedisFallbacks
+        expr: increase(coffee_order_redis_fallback_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order Redis fallback is active
+          description: At least one Redis operation used the in-memory fallback in the last ten minutes.
+
+      - alert: CoffeeOrderWorkflowFailures
+        expr: increase(coffee_order_workflow_failures_total[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Coffee Order workflow failures detected
+          description: A Payment, Delivery, or Settlement workflow failed in the last ten minutes.
+
+      - alert: CoffeeOrderWorkflowRetries
+        expr: increase(coffee_order_workflow_retries_total[10m]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: Coffee Order workflow retries detected
+          description: A Payment or Delivery workflow needed a retry in the last ten minutes.

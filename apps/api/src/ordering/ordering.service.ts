@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { getCorrelationId } from '../observability/correlation-context';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
 import {
   Order,
@@ -87,6 +88,10 @@ function isCancellableStatus(
   );
 }
 
+function currentCorrelationId(): string {
+  return getCorrelationId() ?? randomUUID();
+}
+
 @Injectable()
 export class OrderingService {
   constructor(
@@ -103,7 +108,7 @@ export class OrderingService {
     const addressSnapshot = normalizeAddressSnapshot(
       body.address ?? body.deliveryAddress ?? body.addressSnapshot,
     );
-    const correlationId = randomUUID();
+    const correlationId = currentCorrelationId();
 
     try {
       const orderId = await this.outboxService.transaction(async (tx) => {
@@ -345,7 +350,7 @@ export class OrderingService {
         throw new NotFoundException('Order not found');
       }
       await this.assertCanCancel(userId, existing);
-      const correlationId = randomUUID();
+      const correlationId = currentCorrelationId();
 
       await this.outboxService.transaction(async (tx) => {
         const [current] = await tx
@@ -778,7 +783,7 @@ export class OrderingService {
             aggregateType: 'Order',
             aggregateId: started.id,
             aggregateVersion: started.aggregateVersion,
-            correlationId: randomUUID(),
+            correlationId: currentCorrelationId(),
             causationId: null,
             idempotencyKey: `OrderPreparationStarted:${started.id}`,
             occurredAt: startedAt,
@@ -858,7 +863,7 @@ export class OrderingService {
             aggregateType: 'Order',
             aggregateId: ready.id,
             aggregateVersion: ready.aggregateVersion,
-            correlationId: randomUUID(),
+            correlationId: currentCorrelationId(),
             causationId: null,
             idempotencyKey: `OrderReadyForDelivery:${ready.id}`,
             occurredAt: readyAt,

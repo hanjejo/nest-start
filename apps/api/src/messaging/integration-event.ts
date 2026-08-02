@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import {
+  generateCorrelationId,
+  getCorrelationContext,
+  normalizeCorrelationId,
+} from '../observability/correlation-context';
 
 export type IntegrationEventPayload = Record<string, unknown>;
 
@@ -23,11 +28,16 @@ export type NewIntegrationEvent<
   TPayload extends IntegrationEventPayload = IntegrationEventPayload,
 > = Omit<
   IntegrationEventEnvelope<TPayload>,
-  'eventId' | 'idempotencyKey' | 'occurredAt' | 'causationId'
+  | 'eventId'
+  | 'idempotencyKey'
+  | 'occurredAt'
+  | 'causationId'
+  | 'correlationId'
 > & {
   eventId?: string;
   idempotencyKey?: string;
   occurredAt?: Date | string;
+  correlationId?: string;
   causationId?: string | null;
 };
 
@@ -61,6 +71,23 @@ function requiredText(value: string | undefined, field: string): string {
   return value;
 }
 
+function resolveCorrelationId(value: string | undefined): string {
+  if (value !== undefined) {
+    const normalized = normalizeCorrelationId(value);
+    if (!normalized) {
+      throw new TypeError(
+        'Integration event correlationId must be a bounded safe identifier',
+      );
+    }
+    return normalized;
+  }
+
+  return (
+    getCorrelationContext()?.correlationId ??
+    generateCorrelationId()
+  );
+}
+
 export function createIntegrationEvent<
   TPayload extends IntegrationEventPayload,
 >(input: NewIntegrationEvent<TPayload>): IntegrationEventEnvelope<TPayload> {
@@ -92,8 +119,11 @@ export function createIntegrationEvent<
     aggregateType: requiredText(input.aggregateType, 'aggregateType'),
     aggregateId: requiredText(input.aggregateId, 'aggregateId'),
     aggregateVersion: input.aggregateVersion ?? null,
-    correlationId: requiredText(input.correlationId, 'correlationId'),
-    causationId: input.causationId === undefined ? null : input.causationId,
+    correlationId: resolveCorrelationId(input.correlationId),
+    causationId:
+      input.causationId === undefined
+        ? (getCorrelationContext()?.causationId ?? null)
+        : input.causationId,
     payload: input.payload,
   } satisfies IntegrationEventEnvelope<TPayload>;
 

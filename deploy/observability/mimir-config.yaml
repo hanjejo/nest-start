@@ -1,0 +1,33 @@
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+
+ingester:
+  ring:
+    replication_factor: 1
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/blocks
+  tsdb:
+    dir: /data/tsdb
+
+compactor:
+  data_dir: /data/compactor
+  sharding_ring:
+    replication_factor: 1
+  blocks_retention_period: 168h
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+ruler:
+  rule_path: /data/ruler
+  alertmanager_url: http://localhost:9093
+
+limits:
+  compactor_blocks_retention_period: 168h
+  max_global_series_per_user: 100000

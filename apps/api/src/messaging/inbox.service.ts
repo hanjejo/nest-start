@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { and, eq, or } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
@@ -16,6 +16,11 @@ import {
   IntegrationEventTransport,
 } from './messaging.transport';
 import { DrizzleTransaction } from './outbox.service';
+import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import { MetricsService } from '../observability/metrics.service';
 
 export type InboxEffectResult = Readonly<{
   afterCommit?: () => Promise<void>;
@@ -56,9 +61,22 @@ export class InboxService {
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     @Inject(INTEGRATION_EVENT_TRANSPORT)
     private readonly transport: IntegrationEventTransport,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async process(
+    event: IntegrationEventEnvelope,
+    consumerName: string,
+    effect: InboxEffect,
+    policy: RetryPolicy = DEFAULT_RETRY_POLICY,
+  ): Promise<InboxProcessingResult> {
+    return runWithCorrelationContext(
+      withCorrelationContext(event.correlationId, event.causationId),
+      () => this.processInContext(event, consumerName, effect, policy),
+    );
+  }
+
+  private async processInContext(
     event: IntegrationEventEnvelope,
     consumerName: string,
     effect: InboxEffect,
@@ -214,11 +232,16 @@ export class InboxService {
     effect: InboxEffect,
     policy: RetryPolicy = DEFAULT_RETRY_POLICY,
   ): Promise<InboxProcessingResult> {
+    const startedAt = process.hrtime.bigint();
     const result = await this.process(
       delivery.envelope,
       consumerName,
       effect,
       policy,
+    );
+    this.metrics?.observeInbox(
+      result.status,
+      Number(process.hrtime.bigint() - startedAt) / 1_000_000,
     );
 
     if (result.status === 'RETRY') {

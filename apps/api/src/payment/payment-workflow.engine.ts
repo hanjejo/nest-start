@@ -1,13 +1,16 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PaymentIntent } from '../db/schema';
+import { MetricsService } from '../observability/metrics.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider';
 import { PaymentRepository } from './payment.repository';
 import {
+  PAYMENT_WORKFLOW_NAME,
   PAYMENT_WORKFLOW_MAX_ATTEMPTS,
   PaymentWorkflowInput,
   PaymentWorkflowResult,
   PaymentWorkflowStep,
 } from './payment-workflow.types';
+import { withSpan } from '../observability/tracing';
 
 function directStep<T>(_name: string, work: () => Promise<T>): Promise<T> {
   return work();
@@ -19,11 +22,21 @@ export class PaymentWorkflowEngine {
     private readonly paymentRepository: PaymentRepository,
     @Inject(PAYMENT_PROVIDER)
     private readonly paymentProvider: PaymentProvider,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async run(
     input: PaymentWorkflowInput,
     step: PaymentWorkflowStep = directStep,
+  ): Promise<PaymentWorkflowResult> {
+    return withSpan('workflow.payment.run', () =>
+      this.runInternal(input, step),
+    );
+  }
+
+  private async runInternal(
+    input: PaymentWorkflowInput,
+    step: PaymentWorkflowStep,
   ): Promise<PaymentWorkflowResult> {
     const initial = await step('load-payment-intent', () =>
       this.paymentRepository.getIntent(input.paymentIntentId),
@@ -69,13 +82,15 @@ export class PaymentWorkflowEngine {
       const outcome = await step(
         `charge-payment-attempt-${input.workflowGeneration}-${attemptNumber}`,
         () =>
-          this.paymentProvider.charge({
-            paymentIntentId: prepared.intent.id,
-            orderId: prepared.intent.orderId,
-            amountMinor: prepared.intent.amountMinor,
-            currency: prepared.intent.currency,
-            idempotencyKey: prepared.attempt.providerIdempotencyKey,
-          }),
+          withSpan('payment.provider.charge', () =>
+            this.paymentProvider.charge({
+              paymentIntentId: prepared.intent.id,
+              orderId: prepared.intent.orderId,
+              amountMinor: prepared.intent.amountMinor,
+              currency: prepared.intent.currency,
+              idempotencyKey: prepared.attempt.providerIdempotencyKey,
+            }),
+          ),
       );
 
       const application = await step(
@@ -88,6 +103,9 @@ export class PaymentWorkflowEngine {
             outcome,
           ),
       );
+      if (application.retryable) {
+        this.metrics?.recordWorkflowRetry(PAYMENT_WORKFLOW_NAME);
+      }
       if (application.terminal || !application.retryable) {
         return this.result(application.intent);
       }

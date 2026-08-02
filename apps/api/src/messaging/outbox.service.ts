@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
@@ -19,6 +19,7 @@ import {
   retryDelayMs,
 } from './messaging.constants';
 import { safeFailureReason } from './failure';
+import { MetricsService } from '../observability/metrics.service';
 
 export type DrizzleTransaction = Parameters<
   Parameters<DrizzleDB['transaction']>[0]
@@ -52,7 +53,10 @@ function eventValues(event: IntegrationEventEnvelope) {
 
 @Injectable()
 export class OutboxService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
 
   createEvent<TPayload extends Record<string, unknown>>(
     input: NewIntegrationEvent<TPayload>,
@@ -100,7 +104,7 @@ export class OutboxService {
   }
 
   async pending(limit = 100, now = new Date()): Promise<OutboxEvent[]> {
-    return this.db
+    const events = await this.db
       .select()
       .from(outboxEvents)
       .where(
@@ -117,6 +121,12 @@ export class OutboxService {
       )
       .orderBy(asc(outboxEvents.createdAt), asc(outboxEvents.eventId))
       .limit(limit);
+    const oldest = events[0]?.createdAt;
+    this.metrics?.setOutboxBacklog(
+      events.length,
+      oldest ? Math.max(0, now.getTime() - oldest.getTime()) / 1_000 : 0,
+    );
+    return events;
   }
 
   async markPublished(
@@ -159,6 +169,10 @@ export class OutboxService {
         ? null
         : new Date(failedAt.getTime() + retryDelayMs(attempts, policy));
       const status: OutboxStatus = deadLettered ? 'DEAD_LETTERED' : 'FAILED';
+      this.metrics?.recordOutboxPublishFailure();
+      if (deadLettered) {
+        this.metrics?.recordOutboxDeadLettered();
+      }
 
       await tx
         .update(outboxEvents)

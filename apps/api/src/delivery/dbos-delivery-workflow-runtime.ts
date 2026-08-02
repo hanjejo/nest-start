@@ -2,6 +2,10 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { Pool } from 'pg';
 import { DeliveryWorkflowEngine } from './delivery-workflow.engine';
 import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import {
   DELIVERY_WORKFLOW_NAME,
   DELIVERY_WORKFLOW_QUEUE,
   DeliveryWorkflowHandle,
@@ -23,13 +27,17 @@ export class DbosDeliveryWorkflowRuntime implements DeliveryWorkflowRuntime {
   ) {
     this.registeredWorkflow = DBOS.registerWorkflow(
       async (input: DeliveryWorkflowInput) =>
-        this.engine.run(input, (name, work) =>
-          DBOS.runStep(work, {
-            name,
-            retriesAllowed: name.startsWith('request-delivery-attempt'),
-            maxAttempts: 3,
-            intervalSeconds: 1,
-          }),
+        runWithCorrelationContext(
+          withCorrelationContext(input.correlationId, input.causationId),
+          () =>
+            this.engine.run(input, (name, work) =>
+              DBOS.runStep(work, {
+                name,
+                retriesAllowed: name.startsWith('request-delivery-attempt'),
+                maxAttempts: 3,
+                intervalSeconds: 1,
+              }),
+            ),
         ),
       { name: DELIVERY_WORKFLOW_NAME },
     );

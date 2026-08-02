@@ -1,0 +1,385 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "HTTP requests by route",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (route) (rate(coffee_order_http_requests_total[5m]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "HTTP p95 latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(coffee_order_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "title": "Outbox pending",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "coffee_order_outbox_pending",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "id": 4,
+      "title": "Oldest Outbox age",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "coffee_order_outbox_oldest_age_seconds",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "id": 5,
+      "title": "Correlated application logs",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{service=\"coffee-order-api\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "title": "RabbitMQ and in-memory backlog",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "coffee_order_rabbitmq_backlog",
+          "legendFormat": "{{transport}}/{{queue}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 7,
+      "title": "Transport retries and Dead Letters",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (transport) (rate(coffee_order_rabbitmq_retries_total[5m]))",
+          "legendFormat": "retries {{transport}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (transport) (rate(coffee_order_rabbitmq_dead_letters_total[5m]))",
+          "legendFormat": "dead letters {{transport}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "id": 8,
+      "title": "PostgreSQL health and migrations",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "coffee_order_health_status{component=\"postgresql\",status=\"up\"}",
+          "legendFormat": "health",
+          "refId": "A"
+        },
+        {
+          "expr": "coffee_order_postgresql_migration_status{status=\"applied\"}",
+          "legendFormat": "migrations applied",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
+      "id": 9,
+      "title": "PostgreSQL transaction failures",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(coffee_order_postgresql_transaction_failures_total[5m])",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
+      "id": 10,
+      "title": "Inbox processing and duplicates",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(coffee_order_inbox_processing_total[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 11,
+      "title": "Redis hits, fallbacks, and errors",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(coffee_order_redis_hits_total[5m])",
+          "legendFormat": "hits",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(coffee_order_redis_fallback_total[5m])",
+          "legendFormat": "fallbacks",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(coffee_order_redis_errors_total[5m])",
+          "legendFormat": "errors",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "id": 12,
+      "title": "Workflow completion, retries, and recovery",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum by (workflow) (rate(coffee_order_workflow_completions_total[5m]))",
+          "legendFormat": "completed {{workflow}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (workflow) (rate(coffee_order_workflow_failures_total[5m]))",
+          "legendFormat": "failed {{workflow}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum by (workflow) (rate(coffee_order_workflow_retries_total[5m]))",
+          "legendFormat": "retries {{workflow}}",
+          "refId": "C"
+        },
+        {
+          "expr": "sum by (workflow) (rate(coffee_order_workflow_recoveries_total[5m]))",
+          "legendFormat": "recovery {{workflow}}",
+          "refId": "D"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": [
+    "coffee-order",
+    "observability"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "title": "Coffee Order API Overview",
+  "uid": "coffee-order-overview",
+  "version": 1
+}

@@ -14,9 +14,11 @@ import { PaymentModule } from '../payment/payment.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { SettlementModule } from '../settlement/settlement.module';
 import { PerformanceModule } from '../performance/performance.module';
+import { ObservabilityModule } from '../observability/observability.module';
 
 @Module({
   imports: [
+    ObservabilityModule,
     DrizzleModule,
     PerformanceModule,
     HealthModule,

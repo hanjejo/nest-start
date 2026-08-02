@@ -1,19 +1,26 @@
 import {
   Inject,
   Injectable,
-  Logger,
   OnApplicationShutdown,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
+import { PinoLogger } from 'nestjs-pino';
 import { Pool } from 'pg';
 import { DATABASE_POOL } from '../db/drizzle.module';
 import { safeFailureReason } from '../messaging/failure';
+import {
+  runWithCorrelationContext,
+  withCorrelationContext,
+} from '../observability/correlation-context';
+import { MetricsService } from '../observability/metrics.service';
 import { DbosPaymentWorkflowRuntime } from './dbos-payment-workflow-runtime';
 import { PaymentWorkflowEngine } from './payment-workflow.engine';
 import {
   PaymentWorkflowHandle,
   PaymentWorkflowInput,
   PaymentWorkflowResult,
+  PAYMENT_WORKFLOW_NAME,
   paymentWorkflowId,
 } from './payment-workflow.types';
 
@@ -24,7 +31,10 @@ export interface PaymentWorkflowRuntime {
 export class LocalPaymentWorkflowRuntime implements PaymentWorkflowRuntime {
   private readonly runs = new Map<string, Promise<PaymentWorkflowResult>>();
 
-  constructor(private readonly engine: PaymentWorkflowEngine) {}
+  constructor(
+    private readonly engine: PaymentWorkflowEngine,
+    private readonly metrics?: MetricsService,
+  ) {}
 
   async start(input: PaymentWorkflowInput): Promise<PaymentWorkflowHandle> {
     const workflowId = paymentWorkflowId(
@@ -40,6 +50,8 @@ export class LocalPaymentWorkflowRuntime implements PaymentWorkflowRuntime {
           this.runs.delete(workflowId);
         }
       });
+    } else {
+      this.metrics?.recordWorkflowRecovery(PAYMENT_WORKFLOW_NAME);
     }
 
     await result;
@@ -55,7 +67,6 @@ export class LocalPaymentWorkflowRuntime implements PaymentWorkflowRuntime {
 export class PaymentWorkflowRuntimeService
   implements PaymentWorkflowRuntime, OnModuleInit, OnApplicationShutdown
 {
-  private readonly logger = new Logger(PaymentWorkflowRuntimeService.name);
   private readonly localRuntime: LocalPaymentWorkflowRuntime;
   private dbosRuntime: DbosPaymentWorkflowRuntime | undefined;
   private activeRuntime: PaymentWorkflowRuntime;
@@ -64,8 +75,10 @@ export class PaymentWorkflowRuntimeService
   constructor(
     private readonly engine: PaymentWorkflowEngine,
     @Inject(DATABASE_POOL) private readonly pool: Pool,
+    private readonly logger: PinoLogger,
+    @Optional() private readonly metrics?: MetricsService,
   ) {
-    this.localRuntime = new LocalPaymentWorkflowRuntime(engine);
+    this.localRuntime = new LocalPaymentWorkflowRuntime(engine, metrics);
     this.activeRuntime = this.localRuntime;
   }
 
@@ -82,14 +95,19 @@ export class PaymentWorkflowRuntimeService
       this.mode = 'dbos';
     } catch (error) {
       this.logger.warn(
-        `DBOS PaymentWorkflow unavailable; using explicit local fallback: ${safeFailureReason(error)}`,
+        {
+          reason: safeFailureReason(error),
+        },
+        'DBOS PaymentWorkflow unavailable; using explicit local fallback',
       );
       await dbosRuntime.shutdown().catch(() => undefined);
     }
   }
 
   start(input: PaymentWorkflowInput): Promise<PaymentWorkflowHandle> {
-    return this.activeRuntime.start(input);
+    const startedAt = Date.now();
+    this.metrics?.recordWorkflowStarted(PAYMENT_WORKFLOW_NAME);
+    return this.startTracked(input, startedAt);
   }
 
   get runtimeMode(): 'dbos' | 'local' {
@@ -98,6 +116,39 @@ export class PaymentWorkflowRuntimeService
 
   async onApplicationShutdown(): Promise<void> {
     await this.dbosRuntime?.shutdown();
+  }
+
+  private async startTracked(
+    input: PaymentWorkflowInput,
+    startedAt: number,
+  ): Promise<PaymentWorkflowHandle> {
+    try {
+      const handle = await runWithCorrelationContext(
+        withCorrelationContext(input.correlationId, input.causationId),
+        () => this.activeRuntime.start(input),
+      );
+      if (this.metrics) {
+        void handle.getResult().then(
+          () =>
+            this.metrics?.recordWorkflowCompleted(
+              PAYMENT_WORKFLOW_NAME,
+              Date.now() - startedAt,
+            ),
+          () =>
+            this.metrics?.recordWorkflowFailure(
+              PAYMENT_WORKFLOW_NAME,
+              Date.now() - startedAt,
+            ),
+        );
+      }
+      return handle;
+    } catch (error) {
+      this.metrics?.recordWorkflowFailure(
+        PAYMENT_WORKFLOW_NAME,
+        Date.now() - startedAt,
+      );
+      throw error;
+    }
   }
 
   private shouldUseDbos(): boolean {
