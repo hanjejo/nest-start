@@ -37,6 +37,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - v1 operational targets are 99.9% monthly API availability, synchronous API p95 at or below 300 ms excluding provider wait, asynchronous workflow p95 at or below 30 seconds without provider action, RPO at most 15 minutes, and RTO within 60 minutes.
 - OpenTelemetry SDK and instrumentation provide telemetry, while Pino emits structured JSON logs with trace and correlation context to stdout for Collector export into LGTM.
 - DBOS provides PostgreSQL-backed durable execution for `PaymentWorkflow`, `DeliveryWorkflow`, and `SettlementWorkflow`; it does not replace normal Aggregate transactions, Outbox/Inbox, or RabbitMQ.
+- DBOS workflows run in the NestJS API process in v1; the SDK remains external to Webpack, uses the existing PostgreSQL system database, and is not split into a separate Worker unless load isolation later requires it.
 - Docker Compose supports fast local application development; `kind` runs the full Kubernetes integration stack, and Terraform AWS follows after the application specification is stable.
 - RabbitMQ is the Integration Event transport; PostgreSQL Outbox remains the canonical event record, and consumers acknowledge messages only after Inbox and state changes commit.
 - RabbitMQ uses one durable `integration.events` topic exchange, Context-specific durable queues, Event Type routing keys, TTL retry queues, and Context-specific Dead Letter Queues.
@@ -76,4 +77,3 @@ Context boundaries are defined below and described by the linked Context glossar
 
 ## Still unresolved
 
-- Nx/Webpack runtime packaging and deployment validation for the external DBOS SDK.

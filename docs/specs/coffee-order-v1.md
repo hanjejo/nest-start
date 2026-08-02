@@ -136,7 +136,8 @@ Ordering owns these states:
 - DBOS does not replace normal Context transactions, Outbox, Inbox, or RabbitMQ transport.
 - DBOS workflows are `PaymentWorkflow`, `DeliveryWorkflow`, and `SettlementWorkflow`.
 - Workflow steps must be idempotent and must not bypass Context ownership.
-- The DBOS SDK remains external to the Nx/Webpack bundle; build and runtime packaging must verify this constraint.
+- DBOS workflows run in the NestJS API process in v1; the SDK remains external to the Nx/Webpack bundle and uses the existing PostgreSQL system database.
+- A separate Worker is deferred until measured load requires process isolation.
 
 ### Storage and platform
 
@@ -204,6 +205,6 @@ Before production claims, the service must measure HTTP, Order, PaymentWorkflow,
 
 - `CONTEXT-MAP.md` and accepted ADRs are the architecture record.
 - Context glossaries, state models, the Integration Event Catalog, and domain workflows are the domain-language record.
-- DBOS SDK packaging and runtime validation must happen before workflow implementation is merged.
+- DBOS SDK external packaging and runtime validation are workflow implementation acceptance criteria.
 - CI must test, build images, and update Git-tracked desired state without applying Kubernetes manifests directly.
 - GitHub Issue publication is not available from the current read-only `gh` environment; this repository document is the local spec artifact until it is published.
