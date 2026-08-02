@@ -4,7 +4,7 @@
 
 ✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/nest?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/nest?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
 
 ## Run tasks
 
@@ -24,6 +24,21 @@ The API uses PostgreSQL as its transactional database. Set `DATABASE_URL` to a
 local or managed PostgreSQL connection string before starting the API; committed
 migrations run automatically during startup. The health endpoint is available
 at `/api/health` and returns a non-200 response when PostgreSQL is unavailable.
+
+## Store-scoped RBAC
+
+The committed PostgreSQL migrations seed the v1 roles and permissions. Register
+an account, then configure a one-shot `RBAC_BOOTSTRAP_TOKEN` and call
+`POST /api/rbac/bootstrap` with that account's `userId` and the token in the
+`x-rbac-bootstrap-token` header. The bootstrap endpoint refuses to run without
+the configured token and refuses to run after a platform administrator exists.
+In production, set `RBAC_BOOTSTRAP_ENABLED=true` explicitly for the initial
+bootstrap and remove or rotate the bootstrap secret afterward.
+
+RBAC catalog and assignment writes require platform-admin permissions. Store
+operator and store-admin assignments require a `storeId`; the protected
+`GET /api/stores/:storeId/workspace` capability verifies that scope on every
+request. Access-token claims contain no roles or permissions.
 
 To see all available targets to run for a project, run:
 
@@ -94,12 +109,13 @@ Nx Console is an editor extension that enriches your developer experience. It le
 
 Learn more:
 
-- [Learn more about this workspace setup](https://nx.dev/nx-api/nest?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
+- [Learn more about this workspace setup](https://nx.dev/nx-api/nest?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 - [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 - [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 - [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
 And join the Nx community:
+
 - [Discord](https://go.nx.dev/community)
 - [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
 - [Our Youtube channel](https://www.youtube.com/@nxdevtools)

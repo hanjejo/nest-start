@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
   id: uuid('id')
@@ -94,3 +105,146 @@ export const authenticationEvents = pgTable(
 );
 
 export type AuthenticationEvent = typeof authenticationEvents.$inferSelect;
+
+export const roleAssignmentScopes = ['GLOBAL', 'STORE'] as const;
+export type RoleAssignmentScope = (typeof roleAssignmentScopes)[number];
+
+export const permissionScopes = ['GLOBAL', 'STORE'] as const;
+export type PermissionScope = (typeof permissionScopes)[number];
+
+export const roles = pgTable(
+  'roles',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text('name').notNull().unique(),
+    description: text('description').notNull(),
+    assignmentScope: text('assignment_scope')
+      .$type<RoleAssignmentScope>()
+      .notNull(),
+    globalStoreAccess: boolean('global_store_access').notNull().default(false),
+    system: boolean('system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'roles_assignment_scope_check',
+      sql`assignment_scope IN ('GLOBAL', 'STORE')`,
+    ),
+    check(
+      'roles_global_store_access_check',
+      sql`global_store_access = false OR assignment_scope = 'GLOBAL'`,
+    ),
+    index('roles_assignment_scope_idx').on(table.assignmentScope),
+  ],
+);
+
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+
+export const permissions = pgTable(
+  'permissions',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    key: text('key').notNull().unique(),
+    description: text('description').notNull(),
+    scope: text('scope').$type<PermissionScope>().notNull(),
+    system: boolean('system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check('permissions_scope_check', sql`scope IN ('GLOBAL', 'STORE')`),
+    index('permissions_scope_idx').on(table.scope),
+  ],
+);
+
+export type Permission = typeof permissions.$inferSelect;
+export type NewPermission = typeof permissions.$inferInsert;
+
+export const rolePermissions = pgTable(
+  'role_permissions',
+  {
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    permissionId: uuid('permission_id')
+      .notNull()
+      .references(() => permissions.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('role_permissions_role_permission_unique').on(
+      table.roleId,
+      table.permissionId,
+    ),
+    index('role_permissions_role_id_idx').on(table.roleId),
+    index('role_permissions_permission_id_idx').on(table.permissionId),
+  ],
+);
+
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type NewRolePermission = typeof rolePermissions.$inferInsert;
+
+export const stores = pgTable(
+  'stores',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    name: text('name').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index('stores_name_idx').on(table.name)],
+);
+
+export type Store = typeof stores.$inferSelect;
+export type NewStore = typeof stores.$inferInsert;
+
+export const roleAssignments = pgTable(
+  'role_assignments',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
+    storeId: uuid('store_id').references(() => stores.id, {
+      onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('role_assignments_user_role_store_unique').on(
+      table.userId,
+      table.roleId,
+      table.storeId,
+    ),
+    uniqueIndex('role_assignments_user_role_global_unique')
+      .on(table.userId, table.roleId)
+      .where(sql`${table.storeId} IS NULL`),
+    index('role_assignments_user_id_idx').on(table.userId),
+    index('role_assignments_role_id_idx').on(table.roleId),
+    index('role_assignments_store_id_idx').on(table.storeId),
+    index('role_assignments_user_store_idx').on(table.userId, table.storeId),
+  ],
+);
+
+export type RoleAssignment = typeof roleAssignments.$inferSelect;
+export type NewRoleAssignment = typeof roleAssignments.$inferInsert;

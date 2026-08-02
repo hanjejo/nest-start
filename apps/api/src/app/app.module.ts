@@ -4,10 +4,11 @@ import { AppService } from './app.service';
 import { DrizzleModule } from '../db/drizzle.module';
 import { HealthModule } from '../health/health.module';
 import { AuthModule } from '../identity-and-access/auth.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [DrizzleModule, HealthModule, AuthModule, UserModule],
+  imports: [DrizzleModule, HealthModule, AuthModule, RbacModule, UserModule],
   controllers: [AppController],
   providers: [AppService],
 })

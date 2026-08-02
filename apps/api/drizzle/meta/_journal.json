@@ -15,6 +15,13 @@
       "when": 1785669637169,
       "tag": "0001_romantic_aaron_stack",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785670844486,
+      "tag": "0002_fuzzy_victor_mancha",
+      "breakpoints": true
     }
   ]
 }
