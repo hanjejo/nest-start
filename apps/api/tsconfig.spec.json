@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/out-tsc",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "vitest.config.mts",
+    "vitest.e2e.config.mts",
+    "src/**/*.spec.ts",
+    "test/**/*.ts"
+  ]
+}
