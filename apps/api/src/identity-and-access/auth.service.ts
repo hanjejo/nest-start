@@ -9,7 +9,13 @@ import {
 import { and, eq, gt } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
-import { authenticationEvents, refreshSessions, users } from '../db/schema';
+import {
+  authenticationEvents,
+  refreshSessions,
+  roleAssignments,
+  roles,
+  users,
+} from '../db/schema';
 import { AccessTokenClaims } from './access-token.service';
 import { AccessTokenService } from './access-token.service';
 import {
@@ -158,6 +164,22 @@ export class AuthService {
         if (!user) {
           throw new Error('Registration did not create an account');
         }
+
+        const [customerRole] = await tx
+          .select({ id: roles.id })
+          .from(roles)
+          .where(eq(roles.name, 'customer'))
+          .limit(1);
+        if (!customerRole) {
+          throw new Error('Customer role is unavailable');
+        }
+
+        await tx.insert(roleAssignments).values({
+          id: randomUUID(),
+          userId: user.id,
+          roleId: customerRole.id,
+          storeId: null,
+        });
 
         const [session] = await tx
           .insert(refreshSessions)

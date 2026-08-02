@@ -25,6 +25,21 @@ local or managed PostgreSQL connection string before starting the API; committed
 migrations run automatically during startup. The health endpoint is available
 at `/api/health` and returns a non-200 response when PostgreSQL is unavailable.
 
+## Store-scoped RBAC
+
+The committed PostgreSQL migrations seed the v1 roles and permissions. Register
+an account, then configure a one-shot `RBAC_BOOTSTRAP_TOKEN` and call
+`POST /api/rbac/bootstrap` with that account's `userId` and the token in the
+`x-rbac-bootstrap-token` header. The bootstrap endpoint refuses to run without
+the configured token and refuses to run after a platform administrator exists.
+In production, set `RBAC_BOOTSTRAP_ENABLED=true` explicitly for the initial
+bootstrap and remove or rotate the bootstrap secret afterward.
+
+RBAC catalog and assignment writes require platform-admin permissions. Store
+operator and store-admin assignments require a `storeId`; the protected
+`GET /api/stores/:storeId/workspace` capability verifies that scope on every
+request. Access-token claims contain no roles or permissions.
+
 To see all available targets to run for a project, run:
 
 ```sh
