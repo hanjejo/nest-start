@@ -69,6 +69,29 @@ export class OrderingController {
     return this.orderingService.cancel(this.userId(request), orderId);
   }
 
+  @Post('orders/:orderId/preparation/start')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  startPreparation(
+    @Req() request: AuthenticatedRequest,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.orderingService.startPreparation(this.userId(request), orderId);
+  }
+
+  @Post('orders/:orderId/preparation/ready')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  markReadyForDelivery(
+    @Req() request: AuthenticatedRequest,
+    @Param('orderId') orderId: string,
+  ) {
+    return this.orderingService.markReadyForDelivery(
+      this.userId(request),
+      orderId,
+    );
+  }
+
   private userId(request: AuthenticatedRequest): string {
     if (!request.user) {
       throw new UnauthorizedException('Authentication required');

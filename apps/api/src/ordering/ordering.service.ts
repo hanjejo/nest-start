@@ -19,6 +19,7 @@ import {
   products,
   stores,
 } from '../db/schema';
+import { normalizeAddressSnapshot } from '../messaging/address-snapshot';
 import { isStoreOrderable } from '../store-management/store-management.service';
 import { RBAC_PERMISSIONS } from '../rbac/rbac.constants';
 import { RbacService } from '../rbac/rbac.service';
@@ -99,6 +100,9 @@ export class OrderingService {
     const body = asRecord(input);
     const storeId = normalizeUuid(body.storeId, 'store ID');
     const lines = this.normalizeLines(body.items);
+    const addressSnapshot = normalizeAddressSnapshot(
+      body.address ?? body.deliveryAddress ?? body.addressSnapshot,
+    );
     const correlationId = randomUUID();
 
     try {
@@ -230,6 +234,7 @@ export class OrderingService {
           status: 'AWAITING_PAYMENT',
           currency,
           totalAmountMinor,
+          addressSnapshot,
           createdAt: now,
           updatedAt: now,
         });
@@ -259,6 +264,7 @@ export class OrderingService {
               customerId,
               orderAmount: totalAmountMinor,
               currency,
+              addressSnapshot,
               lines: snapshotLines.map((line) => ({
                 productId: line.productId,
                 productName: line.productName,
@@ -530,7 +536,7 @@ export class OrderingService {
             orderId: confirmed.id,
             storeId: confirmed.storeId,
             customerId: confirmed.customerId,
-            addressSnapshot: null,
+            addressSnapshot: current.addressSnapshot,
           },
         }),
       );
@@ -649,6 +655,7 @@ export class OrderingService {
       status: order.status,
       currency: order.currency,
       totalAmountMinor: order.totalAmountMinor,
+      addressSnapshot: order.addressSnapshot,
       items: items.map((item) => ({
         id: item.id,
         productId: item.productId,
@@ -706,6 +713,249 @@ export class OrderingService {
     if (!(await this.rbacService.hasPermission(userId, permission, storeId))) {
       throw new ForbiddenException('Access denied');
     }
+  }
+
+  async startPreparation(userIdValue: string, orderIdValue: unknown) {
+    const userId = normalizeUuid(userIdValue, 'user ID');
+    const orderId = normalizeUuid(orderIdValue, 'order ID');
+
+    try {
+      const existing = await this.findOrder(orderId);
+      if (!existing) {
+        throw new NotFoundException('Order not found');
+      }
+      await this.assertPermission(
+        userId,
+        RBAC_PERMISSIONS.ORDER_CANCEL_STORE,
+        existing.storeId,
+      );
+
+      await this.outboxService.transaction(async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(orders)
+          .where(eq(orders.id, orderId))
+          .limit(1);
+        if (!current) {
+          throw new NotFoundException('Order not found');
+        }
+        if (
+          current.status === 'PREPARING' ||
+          current.status === 'READY_FOR_DELIVERY' ||
+          current.status === 'DELIVERING' ||
+          current.status === 'COMPLETED'
+        ) {
+          return;
+        }
+        if (current.status !== 'CONFIRMED') {
+          throw new BadRequestException('Order is not ready for preparation');
+        }
+
+        const startedAt = new Date();
+        const [started] = await tx
+          .update(orders)
+          .set({
+            status: 'PREPARING',
+            aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+            updatedAt: startedAt,
+          })
+          .where(and(eq(orders.id, orderId), eq(orders.status, 'CONFIRMED')))
+          .returning({
+            id: orders.id,
+            storeId: orders.storeId,
+            aggregateVersion: orders.aggregateVersion,
+          });
+        if (!started) {
+          return;
+        }
+
+        await this.outboxService.enqueue(
+          tx,
+          createIntegrationEvent({
+            eventType: 'OrderPreparationStarted',
+            eventVersion: 1,
+            producer: 'Ordering',
+            aggregateType: 'Order',
+            aggregateId: started.id,
+            aggregateVersion: started.aggregateVersion,
+            correlationId: randomUUID(),
+            causationId: null,
+            idempotencyKey: `OrderPreparationStarted:${started.id}`,
+            occurredAt: startedAt,
+            payload: {
+              orderId: started.id,
+              storeId: started.storeId,
+            },
+          }),
+        );
+      });
+
+      return this.getOrderView(orderId);
+    } catch (error) {
+      this.rethrow(error, 'Order preparation start failed');
+    }
+  }
+
+  async markReadyForDelivery(userIdValue: string, orderIdValue: unknown) {
+    const userId = normalizeUuid(userIdValue, 'user ID');
+    const orderId = normalizeUuid(orderIdValue, 'order ID');
+
+    try {
+      const existing = await this.findOrder(orderId);
+      if (!existing) {
+        throw new NotFoundException('Order not found');
+      }
+      await this.assertPermission(
+        userId,
+        RBAC_PERMISSIONS.ORDER_CANCEL_STORE,
+        existing.storeId,
+      );
+
+      await this.outboxService.transaction(async (tx) => {
+        const [current] = await tx
+          .select()
+          .from(orders)
+          .where(eq(orders.id, orderId))
+          .limit(1);
+        if (!current) {
+          throw new NotFoundException('Order not found');
+        }
+        if (
+          current.status === 'READY_FOR_DELIVERY' ||
+          current.status === 'DELIVERING' ||
+          current.status === 'COMPLETED'
+        ) {
+          return;
+        }
+        if (current.status !== 'PREPARING') {
+          throw new BadRequestException('Order is not being prepared');
+        }
+
+        const readyAt = new Date();
+        const [ready] = await tx
+          .update(orders)
+          .set({
+            status: 'READY_FOR_DELIVERY',
+            aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+            updatedAt: readyAt,
+          })
+          .where(and(eq(orders.id, orderId), eq(orders.status, 'PREPARING')))
+          .returning({
+            id: orders.id,
+            storeId: orders.storeId,
+            aggregateVersion: orders.aggregateVersion,
+          });
+        if (!ready) {
+          return;
+        }
+
+        await this.outboxService.enqueue(
+          tx,
+          createIntegrationEvent({
+            eventType: 'OrderReadyForDelivery',
+            eventVersion: 1,
+            producer: 'Ordering',
+            aggregateType: 'Order',
+            aggregateId: ready.id,
+            aggregateVersion: ready.aggregateVersion,
+            correlationId: randomUUID(),
+            causationId: null,
+            idempotencyKey: `OrderReadyForDelivery:${ready.id}`,
+            occurredAt: readyAt,
+            payload: {
+              orderId: ready.id,
+              storeId: ready.storeId,
+            },
+          }),
+        );
+      });
+
+      return this.getOrderView(orderId);
+    } catch (error) {
+      this.rethrow(error, 'Order ready transition failed');
+    }
+  }
+
+  async applyDeliveryEvent(
+    event: IntegrationEventEnvelope,
+    tx: DrizzleTransaction,
+  ): Promise<void> {
+    const payload = event.payload;
+    const orderId = payload.orderId;
+    const storeId = payload.storeId;
+    if (typeof orderId !== 'string' || typeof storeId !== 'string') {
+      throw new Error('Delivery event has an invalid order or store ID');
+    }
+
+    const [current] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!current) {
+      throw new Error(`Order ${orderId} was not found for Delivery event`);
+    }
+    if (current.storeId !== storeId) {
+      throw new Error('Delivery event store scope does not match Order');
+    }
+
+    if (event.eventType === 'DeliveryCreated') {
+      return;
+    }
+
+    if (event.eventType === 'DeliveryStarted') {
+      if (current.status === 'DELIVERING' || current.status === 'COMPLETED') {
+        return;
+      }
+      if (current.status !== 'READY_FOR_DELIVERY') {
+        throw new Error('DeliveryStarted cannot advance this Order');
+      }
+      await tx
+        .update(orders)
+        .set({
+          status: 'DELIVERING',
+          aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(orders.id, orderId), eq(orders.status, 'READY_FOR_DELIVERY')),
+        );
+      return;
+    }
+
+    if (event.eventType === 'DeliveryCompleted') {
+      if (current.status === 'COMPLETED') {
+        return;
+      }
+      if (
+        current.status !== 'DELIVERING' &&
+        current.status !== 'READY_FOR_DELIVERY'
+      ) {
+        throw new Error('DeliveryCompleted cannot advance this Order');
+      }
+      await tx
+        .update(orders)
+        .set({
+          status: 'COMPLETED',
+          aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(orders.id, orderId),
+            inArray(orders.status, ['DELIVERING', 'READY_FOR_DELIVERY']),
+          ),
+        );
+      return;
+    }
+
+    if (event.eventType === 'DeliveryFailed') {
+      // Delivery owns failure state. Ordering deliberately leaves the Order
+      // READY_FOR_DELIVERY so an authorized operator can retry the Delivery.
+      return;
+    }
+
+    throw new Error(`Unsupported Delivery event ${event.eventType}`);
   }
 
   private rethrow(error: unknown, fallbackMessage: string): never {

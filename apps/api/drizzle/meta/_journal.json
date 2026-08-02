@@ -57,6 +57,13 @@
       "when": 1785678573882,
       "tag": "0007_chief_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785679746092,
+      "tag": "0008_elite_inhumans",
+      "breakpoints": true
     }
   ]
 }
