@@ -1,6 +1,6 @@
 # 14 — CI GitOps pipeline
 
-**What to build:** A CI run validates the monorepo, builds and publishes application images, and updates Git-tracked Kubernetes desired state for Argo CD to reconcile.
+**What to build:** GitHub Actions validates the monorepo, builds and publishes application images, and updates Git-tracked Kubernetes desired state for Argo CD to reconcile.
 
 **Blocked by:** 13 — Argo CD GitOps deployment.
 

@@ -32,6 +32,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - Local `kind` secrets use encrypted `SOPS + age` manifests; AWS uses External Secrets Operator with AWS Secrets Manager, and plaintext Secrets never enter Git.
 - Kubernetes `Service` and CoreDNS provide Service Discovery; internal dependencies use `ClusterIP` DNS, external HTTP uses Ingress or Gateway, and every workload defines Readiness and Liveness Probes.
 - GitOps desired state lives in this Nx repository under `deploy/k8s`, with shared `base` manifests and `local`, `staging`, and `production` overlays; Argo CD watches an environment overlay, and promotion happens through Git changes.
+- GitHub Actions runs pnpm validation, type checks, tests, image build and push, and GitOps desired-state updates; it never applies Kubernetes manifests directly.
 - LGTM observes HTTP, RabbitMQ, database, and provider calls; metrics cover API health, queue backlog, Outbox/DLQ, PostgreSQL, and Redis, while structured logs carry trace and correlation identifiers with seven-day local retention.
 - v1 operational targets are 99.9% monthly API availability, synchronous API p95 at or below 300 ms excluding provider wait, asynchronous workflow p95 at or below 30 seconds without provider action, RPO at most 15 minutes, and RTO within 60 minutes.
 - OpenTelemetry SDK and instrumentation provide telemetry, while Pino emits structured JSON logs with trace and correlation context to stdout for Collector export into LGTM.
@@ -76,4 +77,3 @@ Context boundaries are defined below and described by the linked Context glossar
 ## Still unresolved
 
 - Nx/Webpack runtime packaging and deployment validation for the external DBOS SDK.
-- CI provider selection.
