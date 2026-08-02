@@ -35,9 +35,7 @@ export function normalizeCorrelationId(value: unknown): string | undefined {
   return isValidCorrelationId(normalized) ? normalized : undefined;
 }
 
-export function correlationIdFromHeader(
-  value: unknown,
-): string | undefined {
+export function correlationIdFromHeader(value: unknown): string | undefined {
   return normalizeCorrelationId(Array.isArray(value) ? undefined : value);
 }
 

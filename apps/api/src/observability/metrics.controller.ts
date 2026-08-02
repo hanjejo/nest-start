@@ -8,8 +8,6 @@ export class MetricsController {
 
   @Get()
   async render(@Res() response: Response): Promise<void> {
-    response
-      .type(this.metrics.contentType)
-      .send(await this.metrics.render());
+    response.type(this.metrics.contentType).send(await this.metrics.render());
   }
 }

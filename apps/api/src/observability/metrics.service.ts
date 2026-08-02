@@ -4,14 +4,13 @@ import { loadObservabilityConfig } from './observability.config';
 
 const STATUS_CLASSES = ['1xx', '2xx', '3xx', '4xx', '5xx'] as const;
 const HEALTH_STATUSES = ['up', 'degraded', 'down', 'disabled'] as const;
-const TRANSPORT_NAMES = ['rabbitmq', 'in-memory'] as const;
 const WORKFLOW_NAMES = [
   'PaymentWorkflow',
   'DeliveryWorkflow',
   'SettlementWorkflow',
 ] as const;
 
-export type TransportName = (typeof TRANSPORT_NAMES)[number];
+export type TransportName = 'rabbitmq' | 'in-memory';
 
 function statusClass(statusCode: number): (typeof STATUS_CLASSES)[number] {
   const value = `${Math.floor(statusCode / 100)}xx`;

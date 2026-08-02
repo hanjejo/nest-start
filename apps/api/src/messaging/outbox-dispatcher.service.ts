@@ -63,10 +63,7 @@ export class OutboxDispatcher {
       try {
         const envelope = toEnvelope(event);
         await runWithCorrelationContext(
-          withCorrelationContext(
-            envelope.correlationId,
-            envelope.causationId,
-          ),
+          withCorrelationContext(envelope.correlationId, envelope.causationId),
           async () => {
             await this.transport.publish(envelope);
             await this.outboxService.markPublished(event.eventId);

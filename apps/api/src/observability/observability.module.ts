@@ -3,7 +3,7 @@ import {
   Module,
   MiddlewareConsumer,
   OnApplicationShutdown,
-  RequestMethod,
+  NestModule,
 } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { CorrelationMiddleware } from './correlation.middleware';
@@ -35,10 +35,8 @@ class TelemetryLifecycle implements OnApplicationShutdown {
   ],
   exports: [MetricsService, TelemetryStatusService],
 })
-export class ObservabilityModule {
+export class ObservabilityModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(CorrelationMiddleware, HttpMetricsMiddleware)
-      .forRoutes({ path: '*', method: RequestMethod.ALL });
+    consumer.apply(CorrelationMiddleware, HttpMetricsMiddleware).forRoutes('/');
   }
 }

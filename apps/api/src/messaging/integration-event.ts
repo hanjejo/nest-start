@@ -28,11 +28,7 @@ export type NewIntegrationEvent<
   TPayload extends IntegrationEventPayload = IntegrationEventPayload,
 > = Omit<
   IntegrationEventEnvelope<TPayload>,
-  | 'eventId'
-  | 'idempotencyKey'
-  | 'occurredAt'
-  | 'causationId'
-  | 'correlationId'
+  'eventId' | 'idempotencyKey' | 'occurredAt' | 'causationId' | 'correlationId'
 > & {
   eventId?: string;
   idempotencyKey?: string;
@@ -82,10 +78,7 @@ function resolveCorrelationId(value: string | undefined): string {
     return normalized;
   }
 
-  return (
-    getCorrelationContext()?.correlationId ??
-    generateCorrelationId()
-  );
+  return getCorrelationContext()?.correlationId ?? generateCorrelationId();
 }
 
 export function createIntegrationEvent<
