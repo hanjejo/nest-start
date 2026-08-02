@@ -10,6 +10,6 @@
 - [ ] Product name and price snapshots are captured at order creation.
 - [ ] New orders start in `AWAITING_PAYMENT`.
 - [ ] Products from different stores cannot be combined in one order.
-- [ ] Allowed cancellation changes the order to `CANCELLED`.
+- [ ] Cancellation before preparation changes the order to `CANCELLED`.
 - [ ] Order API responses enforce customer and store-operator visibility rules.
 - [ ] Tests cover price snapshots, store isolation, and cancellation.

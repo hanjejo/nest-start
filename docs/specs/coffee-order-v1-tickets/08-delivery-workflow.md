@@ -6,7 +6,8 @@
 
 **Status:** ready-for-agent (local draft; not published to GitHub)
 
-- [ ] One Delivery is created for one confirmed Order.
+- [ ] One Delivery is created in `REQUESTED` for one confirmed Order.
+- [ ] Provider or simulated delivery progress starts after the Order reaches `READY_FOR_DELIVERY`.
 - [ ] The delivery address is snapshotted at creation.
 - [ ] Delivery status changes are visible to authorized customers and store operators.
 - [ ] Fake provider failure and retry do not duplicate a Delivery.

@@ -2,7 +2,7 @@
 
 This repository uses a multi-context domain-document layout.
 
-Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling` will resolve them before implementation. Resolved context documentation lives at `apps/api/src/<context>/CONTEXT.md`; system-wide decisions live under `docs/adr/`.
+Context boundaries are defined below and described by the linked Context glossaries. System-wide decisions live under `docs/adr/`; cross-Context events, states, and workflows live under `docs/domain/`.
 
 ## Confirmed decisions
 
@@ -40,16 +40,38 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
-| Candidate context   | Context document                              | Status    |
-| ------------------- | --------------------------------------------- | --------- |
-| Identity and Access | `apps/api/src/identity-and-access/CONTEXT.md` | Candidate |
-| Store Management    | `apps/api/src/store-management/CONTEXT.md`    | Candidate |
-| Catalog             | `apps/api/src/catalog/CONTEXT.md`             | Candidate |
-| Ordering            | `apps/api/src/ordering/CONTEXT.md`            | Candidate |
-| Settlement          | `apps/api/src/settlement/CONTEXT.md`          | Candidate |
-| Payment             | `apps/api/src/payment/CONTEXT.md`             | Candidate |
-| Delivery            | `apps/api/src/delivery/CONTEXT.md`            | Candidate |
+| Context | Context document | Status |
+| --- | --- | --- |
+| Identity and Access | `apps/api/src/identity-and-access/CONTEXT.md` | Defined |
+| Store Management | `apps/api/src/store-management/CONTEXT.md` | Defined |
+| Catalog | `apps/api/src/catalog/CONTEXT.md` | Defined |
+| Ordering | `apps/api/src/ordering/CONTEXT.md` | Defined |
+| Payment | `apps/api/src/payment/CONTEXT.md` | Defined |
+| Settlement | `apps/api/src/settlement/CONTEXT.md` | Defined |
+| Delivery | `apps/api/src/delivery/CONTEXT.md` | Defined |
+
+## Relationships
+
+- **Identity and Access → Store Management**: Store Assignments authorize Store Operator and Store Administrator actions.
+- **Identity and Access → Ordering**: Customer identity and permissions authorize Order commands; Ordering stores the identity reference only.
+- **Store Management → Catalog**: Store Status, Operating Hours, and Store Policies determine whether Catalog data is sellable.
+- **Store Management → Ordering**: Store Status, Operating Hours, and Store Policies determine whether a new Order is accepted.
+- **Catalog → Ordering**: Ordering validates current Product and Price data, then captures a Product Snapshot.
+- **Ordering → Payment**: `OrderPlaced` starts PaymentWorkflow.
+- **Payment → Ordering**: `PaymentSucceeded`, `PaymentFailed`, `PaymentExpired`, and `PaymentRefunded` drive Order decisions.
+- **Ordering → Delivery**: `OrderConfirmed` creates one Delivery; `OrderReadyForDelivery` starts delivery progress.
+- **Delivery → Ordering**: `DeliveryStarted`, `DeliveryCompleted`, and `DeliveryFailed` update Order State.
+- **Ordering → Settlement**: `OrderCompleted` starts SettlementWorkflow.
+- **Payment → Settlement**: Payment outcomes and refunds provide facts through Integration Events; Settlement never reads Payment tables.
+
+## Domain artifacts
+
+- [State Models](./docs/domain/state-models.md)
+- [Integration Event Catalog](./docs/domain/event-catalog.md)
+- [Domain Workflows](./docs/domain/workflows.md)
 
 ## Still unresolved
 
+- Exact cancellation and refund policy after payment and before preparation.
 - Nx/Webpack runtime packaging and deployment validation for the external DBOS SDK.
+- CI provider selection.

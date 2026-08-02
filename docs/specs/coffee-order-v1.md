@@ -84,7 +84,7 @@ Ordering owns these states:
 
 `AWAITING_PAYMENT` → `CONFIRMED` → `PREPARING` → `READY_FOR_DELIVERY` → `DELIVERING` → `COMPLETED`
 
-`CANCELLED` is a terminal state reached only through an allowed cancellation command. Payment, Delivery, and Settlement keep their own state machines and do not duplicate their state inside Ordering.
+`CANCELLED` is a terminal state reached only through an allowed cancellation command. The proposed v1 policy allows cancellation before preparation begins; a paid cancellation starts a refund workflow. Payment, Delivery, and Settlement keep their own state machines and do not duplicate their state inside Ordering.
 
 ### Events and messaging
 
@@ -196,6 +196,7 @@ Tests verify external behavior and recovery guarantees, not internal implementat
 ## Further Notes
 
 - `CONTEXT-MAP.md` and accepted ADRs are the architecture record.
+- Context glossaries, state models, the Integration Event Catalog, and domain workflows are the domain-language record.
 - DBOS SDK packaging and runtime validation must happen before workflow implementation is merged.
 - The CI provider is not yet selected; CI must test, build images, and update Git-tracked desired state without applying Kubernetes manifests directly.
 - GitHub Issue publication is not available from the current read-only `gh` environment; this repository document is the local spec artifact until it is published.
