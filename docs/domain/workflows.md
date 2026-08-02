@@ -77,8 +77,8 @@ Cancellation, refund, and settlement are separate facts. A cancelled Order is no
 
 ## Workflow ownership
 
-| Workflow | Owner | Durable reason | Does not own |
-| --- | --- | --- | --- |
-| `PaymentWorkflow` | Payment | Provider I/O, timeout, callback, retry | Order State |
-| `DeliveryWorkflow` | Delivery | Provider/simulation progress and retry | Order State |
+| Workflow             | Owner      | Durable reason                                     | Does not own  |
+| -------------------- | ---------- | -------------------------------------------------- | ------------- |
+| `PaymentWorkflow`    | Payment    | Provider I/O, timeout, callback, retry             | Order State   |
+| `DeliveryWorkflow`   | Delivery   | Provider/simulation progress and retry             | Order State   |
 | `SettlementWorkflow` | Settlement | Calculation, recovery, idempotent ledger recording | Bank transfer |

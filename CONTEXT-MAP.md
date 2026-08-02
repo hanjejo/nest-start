@@ -40,15 +40,15 @@ Context boundaries are defined below and described by the linked Context glossar
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
 
-| Context | Context document | Status |
-| --- | --- | --- |
+| Context             | Context document                              | Status  |
+| ------------------- | --------------------------------------------- | ------- |
 | Identity and Access | `apps/api/src/identity-and-access/CONTEXT.md` | Defined |
-| Store Management | `apps/api/src/store-management/CONTEXT.md` | Defined |
-| Catalog | `apps/api/src/catalog/CONTEXT.md` | Defined |
-| Ordering | `apps/api/src/ordering/CONTEXT.md` | Defined |
-| Payment | `apps/api/src/payment/CONTEXT.md` | Defined |
-| Settlement | `apps/api/src/settlement/CONTEXT.md` | Defined |
-| Delivery | `apps/api/src/delivery/CONTEXT.md` | Defined |
+| Store Management    | `apps/api/src/store-management/CONTEXT.md`    | Defined |
+| Catalog             | `apps/api/src/catalog/CONTEXT.md`             | Defined |
+| Ordering            | `apps/api/src/ordering/CONTEXT.md`            | Defined |
+| Payment             | `apps/api/src/payment/CONTEXT.md`             | Defined |
+| Settlement          | `apps/api/src/settlement/CONTEXT.md`          | Defined |
+| Delivery            | `apps/api/src/delivery/CONTEXT.md`            | Defined |
 
 ## Relationships
 
