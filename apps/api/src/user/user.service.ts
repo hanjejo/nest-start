@@ -10,19 +10,36 @@ export class UserService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
   async create(createUserDto: CreateUserDto) {
-    const [user] = await this.db
-      .insert(users)
-      .values(createUserDto)
-      .returning();
+    const [user] = await this.db.insert(users).values(createUserDto).returning({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+    });
     return user;
   }
 
   async findAll() {
-    return this.db.select().from(users);
+    return this.db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+      })
+      .from(users);
   }
 
   async findOne(id: string) {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+    const [user] = await this.db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, id));
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
@@ -34,7 +51,12 @@ export class UserService {
       .update(users)
       .set(updateUserDto)
       .where(eq(users.id, id))
-      .returning();
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+      });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
