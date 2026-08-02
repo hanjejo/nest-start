@@ -43,6 +43,20 @@
       "when": 1785677361679,
       "tag": "0005_outbox-inbox-rabbitmq",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785678500818,
+      "tag": "0006_nebulous_jean_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785678573882,
+      "tag": "0007_chief_chameleon",
+      "breakpoints": true
     }
   ]
 }

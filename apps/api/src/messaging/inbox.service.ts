@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
 import { deadLetterEvents, inboxEvents } from '../db/schema';
@@ -17,10 +17,14 @@ import {
 } from './messaging.transport';
 import { DrizzleTransaction } from './outbox.service';
 
+export type InboxEffectResult = Readonly<{
+  afterCommit?: () => Promise<void>;
+}>;
+
 export type InboxEffect = (
   event: IntegrationEventEnvelope,
   tx: DrizzleTransaction,
-) => Promise<void>;
+) => Promise<void | InboxEffectResult>;
 
 export type InboxProcessingResult = Readonly<{
   status: 'PROCESSED' | 'DUPLICATE' | 'RETRY' | 'DEAD_LETTERED';
@@ -63,6 +67,8 @@ export class InboxService {
     const normalizedConsumerName = this.normalizeConsumerName(consumerName);
     let attempts = 0;
     let duplicate = false;
+    let inboxEventId: string | undefined;
+    let afterCommit: (() => Promise<void>) | undefined;
 
     try {
       await this.db.transaction(async (tx) => {
@@ -72,7 +78,10 @@ export class InboxService {
           .where(
             and(
               eq(inboxEvents.consumerName, normalizedConsumerName),
-              eq(inboxEvents.eventId, event.eventId),
+              or(
+                eq(inboxEvents.eventId, event.eventId),
+                eq(inboxEvents.idempotencyKey, event.idempotencyKey),
+              ),
             ),
           )
           .limit(1);
@@ -90,6 +99,7 @@ export class InboxService {
 
         attempts = (existing?.attempts ?? 0) + 1;
         if (existing) {
+          inboxEventId = existing.id;
           await tx
             .update(inboxEvents)
             .set({
@@ -101,8 +111,9 @@ export class InboxService {
             })
             .where(eq(inboxEvents.id, existing.id));
         } else {
+          inboxEventId = randomUUID();
           await tx.insert(inboxEvents).values({
-            id: randomUUID(),
+            id: inboxEventId,
             consumerName: normalizedConsumerName,
             ...eventValues(event),
             status: 'PROCESSING',
@@ -111,9 +122,15 @@ export class InboxService {
           });
         }
 
-        await effect(event, tx);
+        const effectResult = await effect(event, tx);
+        if (effectResult) {
+          afterCommit = effectResult.afterCommit;
+        }
 
         const processedAt = new Date();
+        if (!inboxEventId) {
+          throw new Error('Inbox event identity was not recorded');
+        }
         await tx
           .update(inboxEvents)
           .set({
@@ -123,12 +140,7 @@ export class InboxService {
             lastError: null,
             updatedAt: processedAt,
           })
-          .where(
-            and(
-              eq(inboxEvents.consumerName, normalizedConsumerName),
-              eq(inboxEvents.eventId, event.eventId),
-            ),
-          );
+          .where(eq(inboxEvents.id, inboxEventId));
       });
     } catch (error) {
       try {
@@ -143,13 +155,30 @@ export class InboxService {
       }
     }
 
+    if (afterCommit) {
+      try {
+        await afterCommit();
+      } catch (error) {
+        return this.recordFailure(
+          event,
+          normalizedConsumerName,
+          error,
+          policy,
+          true,
+        );
+      }
+    }
+
     const [existing] = await this.db
       .select({ status: inboxEvents.status, attempts: inboxEvents.attempts })
       .from(inboxEvents)
       .where(
         and(
           eq(inboxEvents.consumerName, normalizedConsumerName),
-          eq(inboxEvents.eventId, event.eventId),
+          or(
+            eq(inboxEvents.eventId, event.eventId),
+            eq(inboxEvents.idempotencyKey, event.idempotencyKey),
+          ),
         ),
       )
       .limit(1);
@@ -220,6 +249,7 @@ export class InboxService {
     consumerName: string,
     error: unknown,
     policy: RetryPolicy,
+    retryProcessed = false,
   ): Promise<InboxProcessingResult> {
     const reason = safeFailureReason(error);
     return this.db.transaction(async (tx) => {
@@ -229,12 +259,15 @@ export class InboxService {
         .where(
           and(
             eq(inboxEvents.consumerName, consumerName),
-            eq(inboxEvents.eventId, event.eventId),
+            or(
+              eq(inboxEvents.eventId, event.eventId),
+              eq(inboxEvents.idempotencyKey, event.idempotencyKey),
+            ),
           ),
         )
         .limit(1);
 
-      if (existing?.status === 'PROCESSED') {
+      if (existing?.status === 'PROCESSED' && !retryProcessed) {
         return {
           status: 'DUPLICATE',
           attempts: existing.attempts,
