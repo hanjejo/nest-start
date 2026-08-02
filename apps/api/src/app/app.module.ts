@@ -13,10 +13,12 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { PaymentModule } from '../payment/payment.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { SettlementModule } from '../settlement/settlement.module';
+import { PerformanceModule } from '../performance/performance.module';
 
 @Module({
   imports: [
     DrizzleModule,
+    PerformanceModule,
     HealthModule,
     AuthModule,
     RbacModule,

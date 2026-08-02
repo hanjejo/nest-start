@@ -11,6 +11,8 @@ import { AccessTokenGuard } from '../rbac/access-token.guard';
 import { PermissionGuard } from '../rbac/permission.guard';
 import { RequirePermission } from '../rbac/rbac.decorators';
 import { RBAC_PERMISSIONS } from '../rbac/rbac.constants';
+import { RateLimit } from '../performance/rate-limit.decorator';
+import { RateLimitGuard } from '../performance/rate-limit.guard';
 import {
   CreateProductDto,
   CreateProductPriceDto,
@@ -23,8 +25,9 @@ export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
   @Get()
-  @UseGuards(AccessTokenGuard, PermissionGuard)
+  @UseGuards(AccessTokenGuard, PermissionGuard, RateLimitGuard)
   @RequirePermission(RBAC_PERMISSIONS.CATALOG_READ)
+  @RateLimit({ key: 'catalog-browse' })
   browse(@Param('storeId') storeId: string) {
     return this.catalogService.browse(storeId);
   }

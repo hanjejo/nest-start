@@ -38,6 +38,28 @@ broker. RabbitMQ declares the durable `integration.events` topic exchange,
 context queues, TTL retry queues, and context Dead Letter Queues when a
 consumer starts.
 
+## Redis performance layer
+
+Set `REDIS_URL` to enable the optional Redis adapter. When it is unset, or when
+Redis is unavailable, the API uses an explicit in-memory fallback and
+PostgreSQL remains authoritative. Redis is used only for the Catalog browse
+projection and short-lived fixed-window rate-limit counters; it never stores
+orders, payments, authentication sessions, or Inbox state. Cache reads still
+load the Store row from PostgreSQL, and entries are keyed by Store ID plus the
+Store `updatedAt` catalog fingerprint. Catalog mutations advance that
+fingerprint in the same PostgreSQL transaction, making older entries
+unreachable.
+
+The defaults are `CATALOG_CACHE_TTL_SECONDS=30`,
+`RATE_LIMIT_WINDOW_SECONDS=60`, and `RATE_LIMIT_LIMIT=100`. Redis connection
+and failure handling can be tuned with `REDIS_CONNECT_TIMEOUT_MS=250`,
+`REDIS_OPERATION_TIMEOUT_MS=500`, and
+`REDIS_RETRY_COOLDOWN_MS=5000`. Cache and rate-limit failures fail open:
+Catalog reads query PostgreSQL and rate-limited requests continue when the
+non-authoritative performance layer is unavailable. `/api/health` reports
+`redis.status` as `up`, `unavailable`, or `disabled`; Redis degradation does
+not make a healthy PostgreSQL database unhealthy.
+
 ## Store-scoped RBAC
 
 The committed PostgreSQL migrations seed the v1 roles and permissions. Register

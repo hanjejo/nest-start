@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpStatus,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { HealthService } from './health.service';
 
@@ -15,9 +10,9 @@ export class HealthController {
   async check(@Res({ passthrough: true }) response: Response) {
     const health = await this.healthService.check();
     response.status(
-      health.status === 'ok'
-        ? HttpStatus.OK
-        : HttpStatus.SERVICE_UNAVAILABLE,
+      health.status === 'error'
+        ? HttpStatus.SERVICE_UNAVAILABLE
+        : HttpStatus.OK,
     );
     return health;
   }

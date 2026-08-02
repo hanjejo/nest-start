@@ -2,8 +2,12 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { newDb } from 'pg-mem';
 import request from 'supertest';
+import { vi } from 'vitest';
 import { AppModule } from '../src/app/app.module';
 import { DATABASE_POOL } from '../src/db/drizzle.module';
+import { CatalogService } from '../src/catalog/catalog.service';
+import { PERFORMANCE_STORE } from '../src/performance/performance.constants';
+import { PerformanceStorePort } from '../src/performance/performance.types';
 
 type AuthResponse = {
   accessToken: string;
@@ -464,5 +468,104 @@ describe('Multi-store catalog (e2e)', () => {
       .get(`/api/stores/${STORE_A_ID}/operations`)
       .set('Authorization', `Bearer ${customer.accessToken}`)
       .expect(403);
+  });
+
+  it('uses the catalog cache, invalidates product changes, and fails open when Redis is unavailable', async () => {
+    const platform = await register('platform');
+    await bootstrap(platform);
+    await createStore(platform, STORE_A_ID, 'Cache Store A');
+    await createStore(platform, STORE_B_ID, 'Cache Store B');
+    const administrator = await register('administrator');
+    const customer = await register('customer');
+    await assignStoreAdmin(platform, administrator.user.id, STORE_A_ID);
+    await updateOperations(administrator.accessToken, STORE_A_ID, {
+      status: 'OPEN',
+      operatingHours: alwaysOpenHours(),
+    });
+    await updateOperations(platform.accessToken, STORE_B_ID, {
+      status: 'OPEN',
+      operatingHours: alwaysOpenHours(),
+    });
+
+    const created = await request(httpServer())
+      .post(`/api/stores/${STORE_A_ID}/catalog/products`)
+      .set('Authorization', `Bearer ${administrator.accessToken}`)
+      .send({
+        name: 'Cached Espresso',
+        priceMinor: 400,
+        lifecycle: 'PUBLISHED',
+        menuVisible: true,
+      })
+      .expect(201);
+
+    const catalogService = app?.get(CatalogService);
+    const listProductRows = vi.spyOn(
+      catalogService as unknown as {
+        listProductRows: (
+          storeId: string,
+          visibleOnly: boolean,
+        ) => Promise<unknown>;
+      },
+      'listProductRows',
+    );
+
+    await request(httpServer())
+      .get(`/api/stores/${STORE_A_ID}/catalog`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.products[0]).toMatchObject({
+          id: created.body.id,
+          priceMinor: 400,
+        });
+      });
+    await request(httpServer())
+      .get(`/api/stores/${STORE_A_ID}/catalog`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect(200);
+    expect(listProductRows).toHaveBeenCalledTimes(1);
+
+    await request(httpServer())
+      .patch(`/api/stores/${STORE_A_ID}/catalog/products/${created.body.id}`)
+      .set('Authorization', `Bearer ${administrator.accessToken}`)
+      .send({ priceMinor: 450 })
+      .expect(200);
+    await request(httpServer())
+      .get(`/api/stores/${STORE_A_ID}/catalog`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.products[0]).toMatchObject({
+          id: created.body.id,
+          priceMinor: 450,
+        });
+      });
+    expect(listProductRows).toHaveBeenCalledTimes(2);
+
+    const performanceStore = app?.get<PerformanceStorePort>(PERFORMANCE_STORE);
+    vi.spyOn(performanceStore, 'get').mockRejectedValue(
+      new Error('Redis unavailable'),
+    );
+    vi.spyOn(performanceStore, 'set').mockRejectedValue(
+      new Error('Redis unavailable'),
+    );
+    vi.spyOn(performanceStore, 'incrementFixedWindow').mockRejectedValue(
+      new Error('Redis unavailable'),
+    );
+
+    const fallbackRead = await request(httpServer())
+      .get(`/api/stores/${STORE_A_ID}/catalog`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect(200);
+    expect(fallbackRead.body.products[0]).toMatchObject({
+      id: created.body.id,
+      priceMinor: 450,
+    });
+    expect(listProductRows).toHaveBeenCalledTimes(3);
+
+    await request(httpServer())
+      .get(`/api/stores/${STORE_B_ID}/catalog`)
+      .set('Authorization', `Bearer ${customer.accessToken}`)
+      .expect({ storeId: STORE_B_ID, products: [] });
   });
 });
