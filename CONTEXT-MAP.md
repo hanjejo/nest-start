@@ -28,6 +28,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - PostgreSQL is the transactional store for domain data, Outbox, and Inbox; Contexts own their tables, and each Context's state change plus Outbox work stays in one transaction.
 - PostgreSQL is the only persisted application data store in v1; durable audit and failure records use append-only PostgreSQL tables, while operational logs remain structured stdout/container logs.
 - Redis is a non-authoritative performance layer for Catalog cache, rate limits, and short-lived temporary values; business state, authentication sessions, and event deduplication remain in PostgreSQL.
+- Local `kind` secrets use encrypted `SOPS + age` manifests; AWS uses External Secrets Operator with AWS Secrets Manager, and plaintext Secrets never enter Git.
 - RabbitMQ is the Integration Event transport; PostgreSQL Outbox remains the canonical event record, and consumers acknowledge messages only after Inbox and state changes commit.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
 - Integration events publish after commit through the outbox and require idempotent consumers.
@@ -45,6 +46,6 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 ## Still unresolved
 
 - LGTM retention, dashboards, and alert rules.
-- GitOps repository layout, environment overlays, and secret management.
+- GitOps repository layout and environment overlays.
 - RabbitMQ exchange, queue, retry, and Dead Letter topology.
 - Local runtime and infrastructure scope.
