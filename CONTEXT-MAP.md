@@ -33,7 +33,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - GitOps desired state lives in this Nx repository under `deploy/k8s`, with shared `base` manifests and `local`, `staging`, and `production` overlays; Argo CD watches an environment overlay, and promotion happens through Git changes.
 - LGTM observes HTTP, RabbitMQ, database, and provider calls; metrics cover API health, queue backlog, Outbox/DLQ, PostgreSQL, and Redis, while structured logs carry trace and correlation identifiers with seven-day local retention.
 - OpenTelemetry SDK and instrumentation provide telemetry, while Pino emits structured JSON logs with trace and correlation context to stdout for Collector export into LGTM.
-- DBOS provides PostgreSQL-backed durable execution only for workflows that need recovery, retries, timers, or multi-step guarantees; it does not replace PostgreSQL transactions, Outbox/Inbox, or RabbitMQ.
+- DBOS provides PostgreSQL-backed durable execution for `PaymentWorkflow`, `DeliveryWorkflow`, and `SettlementWorkflow`; it does not replace normal Aggregate transactions, Outbox/Inbox, or RabbitMQ.
 - Docker Compose supports fast local application development; `kind` runs the full Kubernetes integration stack, and Terraform AWS follows after the application specification is stable.
 - RabbitMQ is the Integration Event transport; PostgreSQL Outbox remains the canonical event record, and consumers acknowledge messages only after Inbox and state changes commit.
 - RabbitMQ uses one durable `integration.events` topic exchange, Context-specific durable queues, Event Type routing keys, TTL retry queues, and Context-specific Dead Letter Queues.
@@ -52,5 +52,4 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 
 ## Still unresolved
 
-- Which business flows become DBOS workflows and where their workflow boundaries sit.
 - Nx/Webpack runtime packaging and deployment validation for the external DBOS SDK.
