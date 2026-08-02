@@ -170,6 +170,8 @@ describe('Store-scoped RBAC (e2e)', () => {
     expect(
       permissions.body.map((permission: { key: string }) => permission.key),
     ).toEqual([
+      'catalog.manage',
+      'catalog.read',
       'order.create',
       'order.read.own',
       'rbac.assignment.read',
@@ -177,6 +179,7 @@ describe('Store-scoped RBAC (e2e)', () => {
       'rbac.catalog.read',
       'rbac.catalog.write',
       'store.directory.read',
+      'store.operations.manage',
       'store.scope.manage',
       'store.scope.read',
     ]);

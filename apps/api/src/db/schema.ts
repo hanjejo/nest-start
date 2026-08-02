@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import {
   boolean,
   check,
+  integer,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
   unique,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -194,6 +197,29 @@ export const rolePermissions = pgTable(
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type NewRolePermission = typeof rolePermissions.$inferInsert;
 
+export const storeStatuses = ['DRAFT', 'OPEN', 'CLOSED', 'SUSPENDED'] as const;
+export type StoreStatus = (typeof storeStatuses)[number];
+
+export const storeWeekdays = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+export type StoreWeekday = (typeof storeWeekdays)[number];
+
+export type OperatingHoursInterval = {
+  open: string;
+  close: string;
+};
+export type OperatingHours = Record<StoreWeekday, OperatingHoursInterval[]>;
+export type StorePolicies = {
+  acceptingOrders: boolean;
+};
+
 export const stores = pgTable(
   'stores',
   {
@@ -201,15 +227,128 @@ export const stores = pgTable(
       .primaryKey()
       .$defaultFn(() => randomUUID()),
     name: text('name').notNull().unique(),
+    status: text('status').$type<StoreStatus>().notNull().default('DRAFT'),
+    timezone: text('timezone').notNull().default('UTC'),
+    operatingHours: jsonb('operating_hours')
+      .$type<OperatingHours>()
+      .notNull()
+      .default(
+        sql`'{"sunday":[],"monday":[],"tuesday":[],"wednesday":[],"thursday":[],"friday":[],"saturday":[]}'::jsonb`,
+      ),
+    policies: jsonb('policies')
+      .$type<StorePolicies>()
+      .notNull()
+      .default(sql`'{"acceptingOrders":true}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
-  (table) => [index('stores_name_idx').on(table.name)],
+  (table) => [
+    check(
+      'stores_status_check',
+      sql`status IN ('DRAFT', 'OPEN', 'CLOSED', 'SUSPENDED')`,
+    ),
+    check('stores_timezone_check', sql`timezone = 'UTC'`),
+    index('stores_name_idx').on(table.name),
+    index('stores_status_idx').on(table.status),
+  ],
 );
 
 export type Store = typeof stores.$inferSelect;
 export type NewStore = typeof stores.$inferInsert;
+
+export const productLifecycles = [
+  'DRAFT',
+  'PUBLISHED',
+  'UNPUBLISHED',
+  'ARCHIVED',
+] as const;
+export type ProductLifecycle = (typeof productLifecycles)[number];
+
+export const products = pgTable(
+  'products',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    lifecycle: text('lifecycle')
+      .$type<ProductLifecycle>()
+      .notNull()
+      .default('DRAFT'),
+    menuVisible: boolean('menu_visible').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'products_lifecycle_check',
+      sql`lifecycle IN ('DRAFT', 'PUBLISHED', 'UNPUBLISHED', 'ARCHIVED')`,
+    ),
+    unique('products_store_name_unique').on(table.storeId, table.name),
+    index('products_store_id_idx').on(table.storeId),
+    index('products_store_visibility_idx').on(
+      table.storeId,
+      table.lifecycle,
+      table.menuVisible,
+    ),
+  ],
+);
+
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;
+
+export const productPrices = pgTable(
+  'product_prices',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id, { onDelete: 'cascade' }),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('USD'),
+    effectiveFrom: timestamp('effective_from', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    effectiveTo: timestamp('effective_to', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check('product_prices_amount_minor_check', sql`amount_minor >= 0`),
+    check(
+      'product_prices_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check(
+      'product_prices_effective_range_check',
+      sql`effective_to IS NULL OR effective_to >= effective_from`,
+    ),
+    index('product_prices_product_effective_idx').on(
+      table.productId,
+      table.effectiveFrom,
+    ),
+  ],
+);
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+export type NewProductPrice = typeof productPrices.$inferInsert;
 
 export const roleAssignments = pgTable(
   'role_assignments',

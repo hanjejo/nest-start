@@ -27,3 +27,16 @@ _Avoid_: Active, enabled
 **Closed**:
 A Store Status that prevents new orders while preserving existing order work.
 _Avoid_: Disabled, offline
+
+## v1 operations representation
+
+Store identity remains in the shared `stores` table used by Identity and
+Access assignments. Store Management owns its operational columns: `status`,
+UTC-only `operatingHours`, and `policies`.
+
+Operating hours are a weekday map of non-overlapping `[open, close)` intervals
+using `HH:mm` strings. `24:00` is the only supported value after `23:59`.
+Orderability always evaluates the current UTC day and time; the host machine's
+local timezone is never used. The v1 policy is
+`{ "acceptingOrders": boolean }`. A store is orderable only in `OPEN` status,
+with `acceptingOrders: true`, and during one of its UTC intervals.
