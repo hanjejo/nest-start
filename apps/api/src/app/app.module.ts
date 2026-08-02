@@ -6,6 +6,7 @@ import { HealthModule } from '../health/health.module';
 import { AuthModule } from '../identity-and-access/auth.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { CatalogModule } from '../catalog/catalog.module';
+import { OrderingModule } from '../ordering/ordering.module';
 import { StoreManagementModule } from '../store-management/store-management.module';
 import { UserModule } from '../user/user.module';
 
@@ -17,6 +18,7 @@ import { UserModule } from '../user/user.module';
     RbacModule,
     StoreManagementModule,
     CatalogModule,
+    OrderingModule,
     UserModule,
   ],
   controllers: [AppController],
