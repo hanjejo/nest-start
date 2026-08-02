@@ -14,7 +14,14 @@ import {
   productLifecycles,
   productPrices,
   products,
+  stores,
 } from '../db/schema';
+import { CATALOG_CACHE } from '../performance/performance.constants';
+import { catalogVersion } from '../performance/catalog-cache.adapter';
+import {
+  CatalogBrowseProjection,
+  CatalogCachePort,
+} from '../performance/performance.types';
 import {
   StoreManagementService,
   isStoreOrderable,
@@ -160,11 +167,21 @@ function productView(
   };
 }
 
+function nextCatalogVersion(value: Date | string): Date {
+  const previous = value instanceof Date ? value.getTime() : Date.parse(value);
+  const now = Date.now();
+  return new Date(
+    Number.isFinite(previous) ? Math.max(now, previous + 1) : now,
+  );
+}
+
 @Injectable()
 export class CatalogService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly storeManagementService: StoreManagementService,
+    @Inject(CATALOG_CACHE)
+    private readonly catalogCache: CatalogCachePort,
   ) {}
 
   async browse(storeIdValue: unknown) {
@@ -173,11 +190,19 @@ export class CatalogService {
       return { storeId: store.id, products: [] };
     }
 
+    const version = catalogVersion(store.updatedAt);
+    const cached = await this.catalogCache.get(store.id, version);
+    if (cached) {
+      return cached;
+    }
+
     const rows = await this.listProductRows(store.id, true);
-    return {
+    const projection: CatalogBrowseProjection = {
       storeId: store.id,
       products: rows.map((row) => productView(row.product, row.currentPrice)),
     };
+    await this.catalogCache.set(store.id, version, projection);
+    return projection;
   }
 
   async list(storeIdValue: unknown) {
@@ -287,8 +312,13 @@ export class CatalogService {
             currency,
           });
         }
+        await tx
+          .update(stores)
+          .set({ updatedAt: nextCatalogVersion(store.updatedAt) })
+          .where(eq(stores.id, store.id));
         return id;
       });
+      await this.catalogCache.invalidate(store.id);
       return this.getProduct(store.id, productId);
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -419,7 +449,12 @@ export class CatalogService {
             effectiveFrom: now,
           });
         }
+        await tx
+          .update(stores)
+          .set({ updatedAt: nextCatalogVersion(store.updatedAt) })
+          .where(eq(stores.id, store.id));
       });
+      await this.catalogCache.invalidate(store.id);
       return this.getProduct(store.id, productId);
     } catch (error) {
       if (
@@ -491,7 +526,12 @@ export class CatalogService {
           currency,
           effectiveFrom: now,
         });
+        await tx
+          .update(stores)
+          .set({ updatedAt: nextCatalogVersion(store.updatedAt) })
+          .where(eq(stores.id, store.id));
       });
+      await this.catalogCache.invalidate(store.id);
       return this.getProduct(store.id, productId);
     } catch (error) {
       if (

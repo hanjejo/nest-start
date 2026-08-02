@@ -1,0 +1,5 @@
+export const PERFORMANCE_CONFIG = Symbol('PERFORMANCE_CONFIG');
+export const PERFORMANCE_STORE = Symbol('PERFORMANCE_STORE');
+export const CATALOG_CACHE = Symbol('CATALOG_CACHE');
+export const RATE_LIMITER = Symbol('RATE_LIMITER');
+export const RATE_LIMIT_OPTIONS = Symbol('RATE_LIMIT_OPTIONS');
