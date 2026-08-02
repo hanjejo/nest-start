@@ -181,6 +181,21 @@ describe('Authentication sessions (e2e)', () => {
     expect(invalidPassword.body.message).toBe(invalidEmail.body.message);
   });
 
+  it('does not expose password hashes through the existing user delete endpoint', async () => {
+    const registered = await register();
+
+    const deleted = await request(httpServer())
+      .delete(`/api/user/${registered.user.id}`)
+      .expect(200);
+
+    expect(deleted.body).toMatchObject({
+      id: registered.user.id,
+      email: registered.user.email,
+      name: registered.user.name,
+    });
+    expect(deleted.body).not.toHaveProperty('passwordHash');
+  });
+
   it('rotates refresh tokens and revokes the family after old-token reuse', async () => {
     const first = await register();
 

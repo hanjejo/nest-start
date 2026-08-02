@@ -67,7 +67,12 @@ export class UserService {
     const [user] = await this.db
       .delete(users)
       .where(eq(users.id, id))
-      .returning();
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        createdAt: users.createdAt,
+      });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
