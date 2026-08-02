@@ -6,11 +6,17 @@ import { RbacModule } from '../rbac/rbac.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { OrderingController } from './ordering.controller';
 import { OrderingService } from './ordering.service';
+import { PaymentEventsConsumer } from './payment-events.consumer';
 
 @Module({
   imports: [AuthModule, RbacModule, MessagingModule],
   controllers: [OrderingController],
-  providers: [OrderingService, AccessTokenGuard, PermissionGuard],
+  providers: [
+    OrderingService,
+    AccessTokenGuard,
+    PermissionGuard,
+    PaymentEventsConsumer,
+  ],
   exports: [OrderingService],
 })
 export class OrderingModule {}

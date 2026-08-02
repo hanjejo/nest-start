@@ -453,6 +453,208 @@ export const orderItems = pgTable(
 export type OrderItem = typeof orderItems.$inferSelect;
 export type NewOrderItem = typeof orderItems.$inferInsert;
 
+export const paymentIntentStatuses = [
+  'PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'EXPIRED',
+] as const;
+export type PaymentIntentStatus = (typeof paymentIntentStatuses)[number];
+
+export const paymentAttemptStatuses = [
+  'PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'TIMED_OUT',
+] as const;
+export type PaymentAttemptStatus = (typeof paymentAttemptStatuses)[number];
+
+export const paymentCallbackOutcomes = [
+  'SUCCEEDED',
+  'FAILED',
+  'TIMED_OUT',
+] as const;
+export type PaymentCallbackOutcome = (typeof paymentCallbackOutcomes)[number];
+
+export const paymentIntents = pgTable(
+  'payment_intents',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    orderId: uuid('order_id').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    status: text('status')
+      .$type<PaymentIntentStatus>()
+      .notNull()
+      .default('PENDING'),
+    aggregateVersion: integer('aggregate_version').notNull().default(1),
+    currentAttemptNumber: integer('current_attempt_number')
+      .notNull()
+      .default(0),
+    workflowGeneration: integer('workflow_generation').notNull().default(1),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    providerReference: text('provider_reference'),
+    lastFailureReason: text('last_failure_reason'),
+    lastFailureRetryable: boolean('last_failure_retryable')
+      .notNull()
+      .default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('payment_intents_order_id_unique').on(table.orderId),
+    check(
+      'payment_intents_status_check',
+      sql`status IN ('PENDING', 'SUCCEEDED', 'FAILED', 'EXPIRED')`,
+    ),
+    check('payment_intents_amount_minor_check', sql`amount_minor >= 0`),
+    check(
+      'payment_intents_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check(
+      'payment_intents_aggregate_version_check',
+      sql`aggregate_version > 0`,
+    ),
+    check(
+      'payment_intents_current_attempt_number_check',
+      sql`current_attempt_number >= 0`,
+    ),
+    check(
+      'payment_intents_workflow_generation_check',
+      sql`workflow_generation > 0`,
+    ),
+    check(
+      'payment_intents_succeeded_reference_check',
+      sql`status <> 'SUCCEEDED' OR provider_reference IS NOT NULL`,
+    ),
+    index('payment_intents_customer_status_idx').on(
+      table.customerId,
+      table.status,
+      table.createdAt,
+    ),
+    index('payment_intents_status_expiry_idx').on(
+      table.status,
+      table.expiresAt,
+    ),
+    index('payment_intents_order_id_idx').on(table.orderId),
+  ],
+);
+
+export type PaymentIntent = typeof paymentIntents.$inferSelect;
+export type NewPaymentIntent = typeof paymentIntents.$inferInsert;
+
+export const paymentAttempts = pgTable(
+  'payment_attempts',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    paymentIntentId: uuid('payment_intent_id')
+      .notNull()
+      .references(() => paymentIntents.id, { onDelete: 'cascade' }),
+    workflowGeneration: integer('workflow_generation').notNull().default(1),
+    attemptNumber: integer('attempt_number').notNull(),
+    providerIdempotencyKey: text('provider_idempotency_key').notNull().unique(),
+    status: text('status')
+      .$type<PaymentAttemptStatus>()
+      .notNull()
+      .default('PENDING'),
+    providerReference: text('provider_reference').unique(),
+    failureReason: text('failure_reason'),
+    retryable: boolean('retryable').notNull().default(false),
+    requestedAt: timestamp('requested_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('payment_attempts_intent_number_unique').on(
+      table.paymentIntentId,
+      table.workflowGeneration,
+      table.attemptNumber,
+    ),
+    check(
+      'payment_attempts_status_check',
+      sql`status IN ('PENDING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT')`,
+    ),
+    check('payment_attempts_number_check', sql`attempt_number > 0`),
+    check(
+      'payment_attempts_workflow_generation_check',
+      sql`workflow_generation > 0`,
+    ),
+    check(
+      'payment_attempts_succeeded_reference_check',
+      sql`status <> 'SUCCEEDED' OR provider_reference IS NOT NULL`,
+    ),
+    index('payment_attempts_intent_created_idx').on(
+      table.paymentIntentId,
+      table.createdAt,
+    ),
+    index('payment_attempts_status_idx').on(table.status),
+  ],
+);
+
+export type PaymentAttempt = typeof paymentAttempts.$inferSelect;
+export type NewPaymentAttempt = typeof paymentAttempts.$inferInsert;
+
+export const paymentCallbacks = pgTable(
+  'payment_callbacks',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    paymentIntentId: uuid('payment_intent_id')
+      .notNull()
+      .references(() => paymentIntents.id, { onDelete: 'cascade' }),
+    paymentAttemptId: uuid('payment_attempt_id')
+      .notNull()
+      .references(() => paymentAttempts.id, { onDelete: 'cascade' }),
+    callbackId: text('callback_id').notNull().unique(),
+    outcome: text('outcome').$type<PaymentCallbackOutcome>().notNull(),
+    providerReference: text('provider_reference'),
+    failureReason: text('failure_reason'),
+    retryable: boolean('retryable').notNull().default(false),
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('payment_callbacks_intent_callback_unique').on(
+      table.paymentIntentId,
+      table.callbackId,
+    ),
+    check(
+      'payment_callbacks_outcome_check',
+      sql`outcome IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT')`,
+    ),
+    index('payment_callbacks_intent_received_idx').on(
+      table.paymentIntentId,
+      table.receivedAt,
+    ),
+  ],
+);
+
+export type PaymentCallback = typeof paymentCallbacks.$inferSelect;
+export type NewPaymentCallback = typeof paymentCallbacks.$inferInsert;
+
 export const outboxStatuses = [
   'PENDING',
   'PUBLISHED',

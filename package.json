@@ -15,6 +15,7 @@
     "lint": "nx run-many -t lint --projects=api,web,web-e2e"
   },
   "dependencies": {
+    "@dbos-inc/dbos-sdk": "^4.25.14",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",

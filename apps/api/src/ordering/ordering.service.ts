@@ -22,8 +22,11 @@ import {
 import { isStoreOrderable } from '../store-management/store-management.service';
 import { RBAC_PERMISSIONS } from '../rbac/rbac.constants';
 import { RbacService } from '../rbac/rbac.service';
-import { createIntegrationEvent } from '../messaging/integration-event';
-import { OutboxService } from '../messaging/outbox.service';
+import {
+  createIntegrationEvent,
+  IntegrationEventEnvelope,
+} from '../messaging/integration-event';
+import { DrizzleTransaction, OutboxService } from '../messaging/outbox.service';
 import { CreateOrderDto } from './ordering.dto';
 
 const UUID_PATTERN =
@@ -457,6 +460,109 @@ export class OrderingService {
     } catch (error) {
       this.rethrow(error, 'Order status transition failed');
     }
+  }
+
+  async applyPaymentEvent(
+    event: IntegrationEventEnvelope,
+    tx: DrizzleTransaction,
+  ): Promise<void> {
+    const payload = event.payload;
+    const orderId = payload.orderId;
+    if (typeof orderId !== 'string') {
+      throw new Error('Payment event has an invalid order ID');
+    }
+
+    const [current] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!current) {
+      throw new Error(`Order ${orderId} was not found for Payment event`);
+    }
+
+    if (event.eventType === 'PaymentSucceeded') {
+      if (
+        typeof payload.storeId !== 'string' ||
+        payload.storeId !== current.storeId
+      ) {
+        throw new Error('PaymentSucceeded store scope does not match Order');
+      }
+      if (current.status !== 'AWAITING_PAYMENT') {
+        return;
+      }
+
+      const confirmedAt = new Date();
+      const [confirmed] = await tx
+        .update(orders)
+        .set({
+          status: 'CONFIRMED',
+          aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+          updatedAt: confirmedAt,
+        })
+        .where(
+          and(eq(orders.id, orderId), eq(orders.status, 'AWAITING_PAYMENT')),
+        )
+        .returning({
+          id: orders.id,
+          storeId: orders.storeId,
+          customerId: orders.customerId,
+          aggregateVersion: orders.aggregateVersion,
+        });
+      if (!confirmed) {
+        return;
+      }
+
+      await this.outboxService.enqueue(
+        tx,
+        createIntegrationEvent({
+          eventType: 'OrderConfirmed',
+          eventVersion: 1,
+          producer: 'Ordering',
+          aggregateType: 'Order',
+          aggregateId: confirmed.id,
+          aggregateVersion: confirmed.aggregateVersion,
+          correlationId: event.correlationId,
+          causationId: event.eventId,
+          idempotencyKey: `OrderConfirmed:${confirmed.id}`,
+          occurredAt: confirmedAt,
+          payload: {
+            orderId: confirmed.id,
+            storeId: confirmed.storeId,
+            customerId: confirmed.customerId,
+            addressSnapshot: null,
+          },
+        }),
+      );
+      return;
+    }
+
+    if (event.eventType === 'PaymentFailed' && payload.retryable === true) {
+      return;
+    }
+
+    if (
+      event.eventType !== 'PaymentFailed' &&
+      event.eventType !== 'PaymentExpired'
+    ) {
+      return;
+    }
+    if (current.status !== 'AWAITING_PAYMENT') {
+      return;
+    }
+
+    const cancelledAt = new Date();
+    await tx
+      .update(orders)
+      .set({
+        status: 'CANCELLED',
+        cancelledAt,
+        aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+        updatedAt: cancelledAt,
+      })
+      .where(
+        and(eq(orders.id, orderId), eq(orders.status, 'AWAITING_PAYMENT')),
+      );
   }
 
   private normalizeLines(value: unknown): CreateOrderLine[] {
