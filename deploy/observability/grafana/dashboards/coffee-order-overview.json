@@ -368,10 +368,7 @@
     }
   ],
   "schemaVersion": 41,
-  "tags": [
-    "coffee-order",
-    "observability"
-  ],
+  "tags": ["coffee-order", "observability"],
   "templating": {
     "list": []
   },
