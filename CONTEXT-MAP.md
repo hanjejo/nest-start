@@ -22,7 +22,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - Store operator and store admin permissions are scoped by `Store ID`; platform admin permissions are global, and APIs authorize by permission rather than role name.
 - Ordering owns `AWAITING_PAYMENT`, `CONFIRMED`, `PREPARING`, `READY_FOR_DELIVERY`, `DELIVERING`, `COMPLETED`, and `CANCELLED`; Payment, Delivery, and Settlement own their own state machines.
 - Contexts do not duplicate one another's lifecycle state; cross-context state changes travel through integration events.
-- Integration Event envelopes contain `eventId`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `aggregateId`, `correlationId`, `causationId`, and `payload`; Outbox stores the complete envelope.
+- Integration Event envelopes contain `eventId`, `idempotencyKey`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `aggregateType`, `aggregateId`, `aggregateVersion`, `correlationId`, `causationId`, and `payload`; Outbox stores the complete envelope.
 - Domain Events remain Context-internal; Integration Events are immutable, additive changes keep the Version, and breaking changes use a new event type or Version.
 - Aggregate changes and Outbox records commit atomically; Dispatcher delivery is at-least-once, Consumers deduplicate through Inbox records, and failed messages use exponential backoff before Dead Letter handling.
 - Inbox recording and Consumer state changes commit atomically; distributed transactions are not used.

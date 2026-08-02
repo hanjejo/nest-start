@@ -25,6 +25,19 @@ local or managed PostgreSQL connection string before starting the API; committed
 migrations run automatically during startup. The health endpoint is available
 at `/api/health` and returns a non-200 response when PostgreSQL is unavailable.
 
+## Integration events
+
+Ordering writes `OrderPlaced` and `OrderCancelled` Integration Events to the
+PostgreSQL Outbox in the same transaction as the Order change. The Outbox is
+the canonical record; a dispatcher publishes immutable, versioned envelopes to
+RabbitMQ and consumers use PostgreSQL Inbox records for idempotency.
+
+Set `RABBITMQ_URL` to enable the RabbitMQ adapter. When it is unset, the API
+uses an in-memory transport so local API tests and development do not require a
+broker. RabbitMQ declares the durable `integration.events` topic exchange,
+context queues, TTL retry queues, and context Dead Letter Queues when a
+consumer starts.
+
 ## Store-scoped RBAC
 
 The committed PostgreSQL migrations seed the v1 roles and permissions. Register

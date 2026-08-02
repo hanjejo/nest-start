@@ -377,6 +377,7 @@ export const orders = pgTable(
       .$type<OrderStatus>()
       .notNull()
       .default('AWAITING_PAYMENT'),
+    aggregateVersion: integer('aggregate_version').notNull().default(1),
     currency: varchar('currency', { length: 3 }).notNull(),
     totalAmountMinor: integer('total_amount_minor').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -392,6 +393,7 @@ export const orders = pgTable(
       'orders_status_check',
       sql`status IN ('AWAITING_PAYMENT', 'CONFIRMED', 'PREPARING', 'READY_FOR_DELIVERY', 'DELIVERING', 'COMPLETED', 'CANCELLED')`,
     ),
+    check('orders_aggregate_version_check', sql`aggregate_version > 0`),
     check(
       'orders_currency_check',
       sql`currency = upper(currency) AND currency <> ''`,
@@ -450,6 +452,180 @@ export const orderItems = pgTable(
 
 export type OrderItem = typeof orderItems.$inferSelect;
 export type NewOrderItem = typeof orderItems.$inferInsert;
+
+export const outboxStatuses = [
+  'PENDING',
+  'PUBLISHED',
+  'FAILED',
+  'DEAD_LETTERED',
+] as const;
+export type OutboxStatus = (typeof outboxStatuses)[number];
+
+export const inboxStatuses = [
+  'PROCESSING',
+  'PROCESSED',
+  'FAILED',
+  'DEAD_LETTERED',
+] as const;
+export type InboxStatus = (typeof inboxStatuses)[number];
+
+export const deadLetterSources = ['OUTBOX', 'INBOX'] as const;
+export type DeadLetterSource = (typeof deadLetterSources)[number];
+
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    eventType: text('event_type').notNull(),
+    eventVersion: integer('event_version').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    producer: text('producer').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    aggregateVersion: integer('aggregate_version'),
+    correlationId: text('correlation_id').notNull(),
+    causationId: text('causation_id'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    status: text('status').$type<OutboxStatus>().notNull().default('PENDING'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check('outbox_events_event_version_check', sql`event_version > 0`),
+    check('outbox_events_attempts_check', sql`attempts >= 0`),
+    check(
+      'outbox_events_status_check',
+      sql`status IN ('PENDING', 'PUBLISHED', 'FAILED', 'DEAD_LETTERED')`,
+    ),
+    index('outbox_events_status_attempt_idx').on(
+      table.status,
+      table.nextAttemptAt,
+    ),
+    index('outbox_events_aggregate_idx').on(
+      table.aggregateType,
+      table.aggregateId,
+    ),
+    index('outbox_events_event_type_idx').on(table.eventType),
+  ],
+);
+
+export type OutboxEvent = typeof outboxEvents.$inferSelect;
+export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
+
+export const inboxEvents = pgTable(
+  'inbox_events',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    consumerName: text('consumer_name').notNull(),
+    eventId: text('event_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    eventType: text('event_type').notNull(),
+    eventVersion: integer('event_version').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    producer: text('producer').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    aggregateVersion: integer('aggregate_version'),
+    correlationId: text('correlation_id').notNull(),
+    causationId: text('causation_id'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    status: text('status').$type<InboxStatus>().notNull().default('PROCESSING'),
+    attempts: integer('attempts').notNull().default(0),
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('inbox_events_consumer_event_unique').on(
+      table.consumerName,
+      table.eventId,
+    ),
+    unique('inbox_events_consumer_idempotency_unique').on(
+      table.consumerName,
+      table.idempotencyKey,
+    ),
+    check('inbox_events_event_version_check', sql`event_version > 0`),
+    check('inbox_events_attempts_check', sql`attempts >= 0`),
+    check(
+      'inbox_events_status_check',
+      sql`status IN ('PROCESSING', 'PROCESSED', 'FAILED', 'DEAD_LETTERED')`,
+    ),
+    index('inbox_events_consumer_status_idx').on(
+      table.consumerName,
+      table.status,
+      table.nextAttemptAt,
+    ),
+    index('inbox_events_event_id_idx').on(table.eventId),
+  ],
+);
+
+export type InboxEvent = typeof inboxEvents.$inferSelect;
+export type NewInboxEvent = typeof inboxEvents.$inferInsert;
+
+export const deadLetterEvents = pgTable(
+  'dead_letter_events',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    source: text('source').$type<DeadLetterSource>().notNull(),
+    consumerName: text('consumer_name'),
+    eventId: text('event_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    eventType: text('event_type').notNull(),
+    eventVersion: integer('event_version').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    producer: text('producer').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    aggregateVersion: integer('aggregate_version'),
+    correlationId: text('correlation_id').notNull(),
+    causationId: text('causation_id'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    attempts: integer('attempts').notNull(),
+    reason: text('reason').notNull(),
+    failedAt: timestamp('failed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('dead_letter_events_source_consumer_event_unique').on(
+      table.source,
+      table.consumerName,
+      table.eventId,
+    ),
+    check('dead_letter_events_event_version_check', sql`event_version > 0`),
+    check('dead_letter_events_attempts_check', sql`attempts > 0`),
+    index('dead_letter_events_event_id_idx').on(table.eventId),
+    index('dead_letter_events_source_idx').on(table.source, table.failedAt),
+  ],
+);
+
+export type DeadLetterEvent = typeof deadLetterEvents.$inferSelect;
+export type NewDeadLetterEvent = typeof deadLetterEvents.$inferInsert;
 
 export const roleAssignments = pgTable(
   'role_assignments',

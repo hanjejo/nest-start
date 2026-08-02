@@ -1,9 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { and, eq } from 'drizzle-orm';
 import { newDb } from 'pg-mem';
 import request from 'supertest';
 import { AppModule } from '../src/app/app.module';
-import { DATABASE_POOL } from '../src/db/drizzle.module';
+import { DATABASE_POOL, DRIZZLE, DrizzleDB } from '../src/db/drizzle.module';
+import { outboxEvents } from '../src/db/schema';
 import { OrderingService } from '../src/ordering/ordering.service';
 
 type AuthResponse = {
@@ -291,6 +293,30 @@ describe('Single-store order (e2e)', () => {
       })
       .expect(201);
 
+    if (!app) {
+      throw new Error('Test application is not initialized');
+    }
+    const [placedEvent] = await app
+      .get<DrizzleDB>(DRIZZLE)
+      .select()
+      .from(outboxEvents)
+      .where(eq(outboxEvents.aggregateId, created.body.id));
+    expect(placedEvent).toMatchObject({
+      eventType: 'OrderPlaced',
+      eventVersion: 1,
+      producer: 'Ordering',
+      aggregateType: 'Order',
+      aggregateId: created.body.id,
+      status: 'PENDING',
+      payload: {
+        orderId: created.body.id,
+        storeId: scenario.storeA,
+        customerId: scenario.customer.user.id,
+        orderAmount: 900,
+        currency: 'USD',
+      },
+    });
+
     expect(created.body).toMatchObject({
       customerId: scenario.customer.user.id,
       storeId: scenario.storeA,
@@ -536,6 +562,32 @@ describe('Single-store order (e2e)', () => {
       .expect(({ body }) => {
         expect(body.status).toBe('CANCELLED');
       });
+    if (!app) {
+      throw new Error('Test application is not initialized');
+    }
+    const [cancelledEvent] = await app
+      .get<DrizzleDB>(DRIZZLE)
+      .select()
+      .from(outboxEvents)
+      .where(
+        and(
+          eq(outboxEvents.aggregateId, operatorOrder.body.id),
+          eq(outboxEvents.eventType, 'OrderCancelled'),
+        ),
+      );
+    expect(cancelledEvent).toMatchObject({
+      eventType: 'OrderCancelled',
+      eventVersion: 1,
+      producer: 'Ordering',
+      aggregateType: 'Order',
+      aggregateId: operatorOrder.body.id,
+      payload: {
+        orderId: operatorOrder.body.id,
+        storeId: scenario.storeA,
+        reason: 'CUSTOMER_REQUESTED',
+        refundRequired: false,
+      },
+    });
     await request(httpServer())
       .post(`/api/orders/${operatorOrder.body.id}/cancel`)
       .set('Authorization', `Bearer ${scenario.operatorA.accessToken}`)

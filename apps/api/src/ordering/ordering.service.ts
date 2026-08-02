@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DRIZZLE, DrizzleDB } from '../db/drizzle.module';
 import {
@@ -22,6 +22,8 @@ import {
 import { isStoreOrderable } from '../store-management/store-management.service';
 import { RBAC_PERMISSIONS } from '../rbac/rbac.constants';
 import { RbacService } from '../rbac/rbac.service';
+import { createIntegrationEvent } from '../messaging/integration-event';
+import { OutboxService } from '../messaging/outbox.service';
 import { CreateOrderDto } from './ordering.dto';
 
 const UUID_PATTERN =
@@ -86,6 +88,7 @@ export class OrderingService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly rbacService: RbacService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async create(customerIdValue: string, input: CreateOrderDto) {
@@ -93,9 +96,10 @@ export class OrderingService {
     const body = asRecord(input);
     const storeId = normalizeUuid(body.storeId, 'store ID');
     const lines = this.normalizeLines(body.items);
+    const correlationId = randomUUID();
 
     try {
-      const orderId = await this.db.transaction(async (tx) => {
+      const orderId = await this.outboxService.transaction(async (tx) => {
         const [store] = await tx
           .select()
           .from(stores)
@@ -232,6 +236,37 @@ export class OrderingService {
             orderId: id,
           })),
         );
+
+        await this.outboxService.enqueue(
+          tx,
+          createIntegrationEvent({
+            eventType: 'OrderPlaced',
+            eventVersion: 1,
+            producer: 'Ordering',
+            aggregateType: 'Order',
+            aggregateId: id,
+            aggregateVersion: 1,
+            correlationId,
+            causationId: null,
+            idempotencyKey: `OrderPlaced:${id}`,
+            occurredAt: now,
+            payload: {
+              orderId: id,
+              storeId,
+              customerId,
+              orderAmount: totalAmountMinor,
+              currency,
+              lines: snapshotLines.map((line) => ({
+                productId: line.productId,
+                productName: line.productName,
+                unitAmountMinor: line.unitAmountMinor,
+                currency: line.currency,
+                quantity: line.quantity,
+                lineAmountMinor: line.lineAmountMinor,
+              })),
+            },
+          }),
+        );
         return id;
       });
 
@@ -301,8 +336,9 @@ export class OrderingService {
         throw new NotFoundException('Order not found');
       }
       await this.assertCanCancel(userId, existing);
+      const correlationId = randomUUID();
 
-      await this.db.transaction(async (tx) => {
+      await this.outboxService.transaction(async (tx) => {
         const [current] = await tx
           .select()
           .from(orders)
@@ -320,12 +356,14 @@ export class OrderingService {
           );
         }
 
+        const cancelledAt = new Date();
         const [cancelled] = await tx
           .update(orders)
           .set({
             status: 'CANCELLED',
-            cancelledAt: new Date(),
-            updatedAt: new Date(),
+            cancelledAt,
+            updatedAt: cancelledAt,
+            aggregateVersion: sql`${orders.aggregateVersion} + 1`,
           })
           .where(
             and(
@@ -333,8 +371,33 @@ export class OrderingService {
               inArray(orders.status, [...CANCELLABLE_STATUSES]),
             ),
           )
-          .returning({ id: orders.id });
+          .returning({
+            id: orders.id,
+            storeId: orders.storeId,
+            aggregateVersion: orders.aggregateVersion,
+          });
         if (cancelled) {
+          await this.outboxService.enqueue(
+            tx,
+            createIntegrationEvent({
+              eventType: 'OrderCancelled',
+              eventVersion: 1,
+              producer: 'Ordering',
+              aggregateType: 'Order',
+              aggregateId: cancelled.id,
+              aggregateVersion: cancelled.aggregateVersion,
+              correlationId,
+              causationId: null,
+              idempotencyKey: `OrderCancelled:${cancelled.id}`,
+              occurredAt: cancelledAt,
+              payload: {
+                orderId: cancelled.id,
+                storeId: cancelled.storeId,
+                reason: 'CUSTOMER_REQUESTED',
+                refundRequired: current.status === 'CONFIRMED',
+              },
+            }),
+          );
           return;
         }
 
@@ -367,7 +430,11 @@ export class OrderingService {
       const [updated] = await this.db.transaction(async (tx) =>
         tx
           .update(orders)
-          .set({ status: 'PREPARING', updatedAt: new Date() })
+          .set({
+            status: 'PREPARING',
+            updatedAt: new Date(),
+            aggregateVersion: sql`${orders.aggregateVersion} + 1`,
+          })
           .where(
             and(
               eq(orders.id, orderId),

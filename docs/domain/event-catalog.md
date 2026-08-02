@@ -4,7 +4,9 @@ Commands are directed requests and use imperative names. Events are facts that a
 
 Every Integration Event uses the shared envelope:
 
-`eventId`, `eventType`, `eventVersion`, `occurredAt`, `producer`, `aggregateId`, `correlationId`, `causationId`, and `payload`.
+`eventId`, `idempotencyKey`, `eventType`, `eventVersion`, `occurredAt`,
+`producer`, `aggregateType`, `aggregateId`, `aggregateVersion`, `correlationId`,
+`causationId`, and `payload`.
 
 ## Store and Catalog events
 

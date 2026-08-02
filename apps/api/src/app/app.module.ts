@@ -9,6 +9,7 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { OrderingModule } from '../ordering/ordering.module';
 import { StoreManagementModule } from '../store-management/store-management.module';
 import { UserModule } from '../user/user.module';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserModule } from '../user/user.module';
     CatalogModule,
     OrderingModule,
     UserModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

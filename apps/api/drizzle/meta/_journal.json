@@ -36,6 +36,13 @@
       "when": 1785675970791,
       "tag": "0004_previous_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785677361679,
+      "tag": "0005_outbox-inbox-rabbitmq",
+      "breakpoints": true
     }
   ]
 }
