@@ -350,6 +350,107 @@ export const productPrices = pgTable(
 export type ProductPrice = typeof productPrices.$inferSelect;
 export type NewProductPrice = typeof productPrices.$inferInsert;
 
+export const orderStatuses = [
+  'AWAITING_PAYMENT',
+  'CONFIRMED',
+  'PREPARING',
+  'READY_FOR_DELIVERY',
+  'DELIVERING',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+export type OrderStatus = (typeof orderStatuses)[number];
+
+export const orders = pgTable(
+  'orders',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    storeId: uuid('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'restrict' }),
+    status: text('status')
+      .$type<OrderStatus>()
+      .notNull()
+      .default('AWAITING_PAYMENT'),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    totalAmountMinor: integer('total_amount_minor').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      'orders_status_check',
+      sql`status IN ('AWAITING_PAYMENT', 'CONFIRMED', 'PREPARING', 'READY_FOR_DELIVERY', 'DELIVERING', 'COMPLETED', 'CANCELLED')`,
+    ),
+    check(
+      'orders_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check('orders_total_amount_minor_check', sql`total_amount_minor >= 0`),
+    index('orders_customer_id_idx').on(table.customerId),
+    index('orders_customer_created_at_idx').on(
+      table.customerId,
+      table.createdAt,
+    ),
+    index('orders_store_id_idx').on(table.storeId),
+    index('orders_store_status_created_at_idx').on(
+      table.storeId,
+      table.status,
+      table.createdAt,
+    ),
+    index('orders_status_idx').on(table.status),
+  ],
+);
+
+export type Order = typeof orders.$inferSelect;
+export type NewOrder = typeof orders.$inferInsert;
+
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id').notNull(),
+    productName: text('product_name').notNull(),
+    unitAmountMinor: integer('unit_amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    quantity: integer('quantity').notNull(),
+    lineAmountMinor: integer('line_amount_minor').notNull(),
+  },
+  (table) => [
+    check(
+      'order_items_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check('order_items_unit_amount_minor_check', sql`unit_amount_minor >= 0`),
+    check('order_items_quantity_check', sql`quantity > 0`),
+    check('order_items_line_amount_minor_check', sql`line_amount_minor >= 0`),
+    unique('order_items_order_product_unique').on(
+      table.orderId,
+      table.productId,
+    ),
+    index('order_items_order_id_idx').on(table.orderId),
+    index('order_items_product_id_idx').on(table.productId),
+  ],
+);
+
+export type OrderItem = typeof orderItems.$inferSelect;
+export type NewOrderItem = typeof orderItems.$inferInsert;
+
 export const roleAssignments = pgTable(
   'role_assignments',
   {

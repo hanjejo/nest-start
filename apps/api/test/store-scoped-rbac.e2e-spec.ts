@@ -172,8 +172,11 @@ describe('Store-scoped RBAC (e2e)', () => {
     ).toEqual([
       'catalog.manage',
       'catalog.read',
+      'order.cancel.own',
+      'order.cancel.store',
       'order.create',
       'order.read.own',
+      'order.read.store',
       'rbac.assignment.read',
       'rbac.assignment.write',
       'rbac.catalog.read',
