@@ -1,15 +1,15 @@
-import { sql } from 'drizzle-orm';
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { pgTable, timestamp, uuid, text } from 'drizzle-orm/pg-core';
+import { randomUUID } from 'node:crypto';
 
-export const users = sqliteTable('users', {
-  id: text('id')
+export const users = pgTable('users', {
+  id: uuid('id')
     .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+    .$defaultFn(() => randomUUID()),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  createdAt: text('created_at')
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(CURRENT_TIMESTAMP)`),
+    .defaultNow(),
 });
 
 export type User = typeof users.$inferSelect;

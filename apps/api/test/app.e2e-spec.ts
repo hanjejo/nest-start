@@ -7,7 +7,6 @@ describe('AppController (e2e)', () => {
   let app: INestApplication;
 
   beforeEach(async () => {
-    process.env.DATABASE_URL = `/tmp/nest-api-e2e-${process.pid}.db`;
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

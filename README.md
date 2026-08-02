@@ -20,6 +20,11 @@ To create a production bundle:
 pnpm nx build api
 ```
 
+The API uses PostgreSQL as its transactional database. Set `DATABASE_URL` to a
+local or managed PostgreSQL connection string before starting the API; committed
+migrations run automatically during startup. The health endpoint is available
+at `/api/health` and returns a non-200 response when PostgreSQL is unavailable.
+
 To see all available targets to run for a project, run:
 
 ```sh
