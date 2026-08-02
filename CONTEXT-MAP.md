@@ -76,4 +76,3 @@ Context boundaries are defined below and described by the linked Context glossar
 - [Production Readiness Contract](./docs/operations/production-readiness.md)
 
 ## Still unresolved
-
