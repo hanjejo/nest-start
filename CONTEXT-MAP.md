@@ -12,6 +12,7 @@ Context boundaries are defined below and described by the linked Context glossar
 - Ordering references `Store ID` and product snapshots without owning Store or Catalog tables.
 - Payment owns customer charge collection; Settlement owns the store payable ledger, including fees, refunds, and adjustments.
 - Settlement becomes eligible after order completion; external bank transfers and provider settlement APIs are out of scope for v1.
+- Orders may be cancelled before `PREPARING`; paid cancellations start Refund Workflow, and normal customer cancellation is unavailable after preparation begins.
 - Payment owns payment intents and payment state; a `PaymentProvider` port isolates provider adapters, with a fake provider used in v1.
 - Ordering cannot access Payment tables directly; it communicates through commands and integration events.
 - Delivery owns one delivery per order, including the address snapshot and delivery state; v1 uses manual or simulated status changes behind a `DeliveryProvider` port.
@@ -72,6 +73,5 @@ Context boundaries are defined below and described by the linked Context glossar
 
 ## Still unresolved
 
-- Exact cancellation and refund policy after payment and before preparation.
 - Nx/Webpack runtime packaging and deployment validation for the external DBOS SDK.
 - CI provider selection.

@@ -55,7 +55,7 @@ Settlement records the Store Payable ledger. It does not transfer money to a ban
 ## Cancellation and refund
 
 1. Customer or authorized Store Operator submits `Cancel Order`.
-2. Under the proposed v1 policy, Ordering accepts cancellation only before preparation begins.
+2. Under the v1 policy, Ordering accepts cancellation only before preparation begins.
 3. Ordering commits `CANCELLED` and `OrderCancelled`.
 4. If payment succeeded, Payment starts the refund portion of PaymentWorkflow.
 5. Payment emits `PaymentRefunded` after provider confirmation.

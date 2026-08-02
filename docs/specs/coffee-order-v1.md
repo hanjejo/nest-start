@@ -84,7 +84,7 @@ Ordering owns these states:
 
 `AWAITING_PAYMENT` → `CONFIRMED` → `PREPARING` → `READY_FOR_DELIVERY` → `DELIVERING` → `COMPLETED`
 
-`CANCELLED` is a terminal state reached only through an allowed cancellation command. The proposed v1 policy allows cancellation before preparation begins; a paid cancellation starts a refund workflow. Payment, Delivery, and Settlement keep their own state machines and do not duplicate their state inside Ordering.
+`CANCELLED` is a terminal state reached only through an allowed cancellation command. The v1 policy allows cancellation before preparation begins; a paid cancellation starts a refund workflow, and normal customer cancellation is unavailable after `PREPARING`. Payment, Delivery, and Settlement keep their own state machines and do not duplicate their state inside Ordering.
 
 ### Events and messaging
 

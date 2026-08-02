@@ -45,7 +45,7 @@ These state models describe business lifecycle, not database implementation. A C
 | `READY_FOR_DELIVERY` | Delivery Started                | `DELIVERING`         | Delivery event             |
 | `DELIVERING`         | Delivery Completed              | `COMPLETED`          | Delivery event             |
 
-Proposed v1 cancellation policy: cancellation is allowed before preparation begins. A paid cancellation requires a Payment refund workflow; cancellation after `PREPARING` is outside the normal customer path and requires an explicit operational policy.
+v1 cancellation policy: cancellation is allowed before preparation begins. A paid cancellation requires a Payment refund workflow; normal customer cancellation is unavailable after `PREPARING`.
 
 ## Payment State
 
