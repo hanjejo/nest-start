@@ -5,6 +5,7 @@ import { PermissionGuard } from '../rbac/permission.guard';
 import { RbacModule } from '../rbac/rbac.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { OrderingController } from './ordering.controller';
+import { DeliveryEventsConsumer } from './delivery-events.consumer';
 import { OrderingService } from './ordering.service';
 import { PaymentEventsConsumer } from './payment-events.consumer';
 
@@ -16,6 +17,7 @@ import { PaymentEventsConsumer } from './payment-events.consumer';
     AccessTokenGuard,
     PermissionGuard,
     PaymentEventsConsumer,
+    DeliveryEventsConsumer,
   ],
   exports: [OrderingService],
 })

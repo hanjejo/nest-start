@@ -14,6 +14,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { AddressSnapshot } from '../messaging/address-snapshot';
 
 export const users = pgTable('users', {
   id: uuid('id')
@@ -380,6 +381,7 @@ export const orders = pgTable(
     aggregateVersion: integer('aggregate_version').notNull().default(1),
     currency: varchar('currency', { length: 3 }).notNull(),
     totalAmountMinor: integer('total_amount_minor').notNull(),
+    addressSnapshot: jsonb('address_snapshot').$type<AddressSnapshot | null>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -866,3 +868,193 @@ export const roleAssignments = pgTable(
 
 export type RoleAssignment = typeof roleAssignments.$inferSelect;
 export type NewRoleAssignment = typeof roleAssignments.$inferInsert;
+
+export const deliveryStatuses = [
+  'REQUESTED',
+  'READY',
+  'IN_TRANSIT',
+  'DELIVERED',
+  'FAILED',
+] as const;
+export type DeliveryStatus = (typeof deliveryStatuses)[number];
+
+export const deliveryAttemptStatuses = [
+  'PENDING',
+  'SUCCEEDED',
+  'FAILED',
+] as const;
+export type DeliveryAttemptStatus = (typeof deliveryAttemptStatuses)[number];
+
+export const deliveryCallbackOutcomes = ['SUCCEEDED', 'FAILED'] as const;
+export type DeliveryCallbackOutcome = (typeof deliveryCallbackOutcomes)[number];
+
+export const deliveries = pgTable(
+  'deliveries',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    orderId: uuid('order_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    customerId: uuid('customer_id').notNull(),
+    addressSnapshot: jsonb('address_snapshot')
+      .$type<AddressSnapshot>()
+      .notNull(),
+    status: text('status')
+      .$type<DeliveryStatus>()
+      .notNull()
+      .default('REQUESTED'),
+    aggregateVersion: integer('aggregate_version').notNull().default(1),
+    currentAttemptNumber: integer('current_attempt_number')
+      .notNull()
+      .default(0),
+    workflowGeneration: integer('workflow_generation').notNull().default(1),
+    providerReference: text('provider_reference'),
+    lastFailureReason: text('last_failure_reason'),
+    lastFailureRetryable: boolean('last_failure_retryable')
+      .notNull()
+      .default(false),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('deliveries_order_id_unique').on(table.orderId),
+    check(
+      'deliveries_status_check',
+      sql`status IN ('REQUESTED', 'READY', 'IN_TRANSIT', 'DELIVERED', 'FAILED')`,
+    ),
+    check('deliveries_aggregate_version_check', sql`aggregate_version > 0`),
+    check(
+      'deliveries_current_attempt_number_check',
+      sql`current_attempt_number >= 0`,
+    ),
+    check('deliveries_workflow_generation_check', sql`workflow_generation > 0`),
+    check(
+      'deliveries_delivered_reference_check',
+      sql`status <> 'DELIVERED' OR provider_reference IS NOT NULL`,
+    ),
+    index('deliveries_store_status_created_at_idx').on(
+      table.storeId,
+      table.status,
+      table.createdAt,
+    ),
+    index('deliveries_customer_created_at_idx').on(
+      table.customerId,
+      table.createdAt,
+    ),
+    index('deliveries_status_idx').on(table.status),
+    index('deliveries_order_id_idx').on(table.orderId),
+  ],
+);
+
+export type Delivery = typeof deliveries.$inferSelect;
+export type NewDelivery = typeof deliveries.$inferInsert;
+
+export const deliveryAttempts = pgTable(
+  'delivery_attempts',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    deliveryId: uuid('delivery_id')
+      .notNull()
+      .references(() => deliveries.id, { onDelete: 'cascade' }),
+    workflowGeneration: integer('workflow_generation').notNull().default(1),
+    attemptNumber: integer('attempt_number').notNull(),
+    providerIdempotencyKey: text('provider_idempotency_key').notNull().unique(),
+    status: text('status')
+      .$type<DeliveryAttemptStatus>()
+      .notNull()
+      .default('PENDING'),
+    providerReference: text('provider_reference').unique(),
+    failureReason: text('failure_reason'),
+    retryable: boolean('retryable').notNull().default(false),
+    requestedAt: timestamp('requested_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('delivery_attempts_delivery_generation_number_unique').on(
+      table.deliveryId,
+      table.workflowGeneration,
+      table.attemptNumber,
+    ),
+    check(
+      'delivery_attempts_status_check',
+      sql`status IN ('PENDING', 'SUCCEEDED', 'FAILED')`,
+    ),
+    check('delivery_attempts_number_check', sql`attempt_number > 0`),
+    check(
+      'delivery_attempts_workflow_generation_check',
+      sql`workflow_generation > 0`,
+    ),
+    check(
+      'delivery_attempts_succeeded_reference_check',
+      sql`status <> 'SUCCEEDED' OR provider_reference IS NOT NULL`,
+    ),
+    index('delivery_attempts_delivery_created_idx').on(
+      table.deliveryId,
+      table.createdAt,
+    ),
+    index('delivery_attempts_status_idx').on(table.status),
+  ],
+);
+
+export type DeliveryAttempt = typeof deliveryAttempts.$inferSelect;
+export type NewDeliveryAttempt = typeof deliveryAttempts.$inferInsert;
+
+export const deliveryCallbacks = pgTable(
+  'delivery_callbacks',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    deliveryId: uuid('delivery_id')
+      .notNull()
+      .references(() => deliveries.id, { onDelete: 'cascade' }),
+    deliveryAttemptId: uuid('delivery_attempt_id')
+      .notNull()
+      .references(() => deliveryAttempts.id, { onDelete: 'cascade' }),
+    callbackId: text('callback_id').notNull().unique(),
+    outcome: text('outcome').$type<DeliveryCallbackOutcome>().notNull(),
+    providerReference: text('provider_reference'),
+    failureReason: text('failure_reason'),
+    retryable: boolean('retryable').notNull().default(false),
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('delivery_callbacks_delivery_callback_unique').on(
+      table.deliveryId,
+      table.callbackId,
+    ),
+    check(
+      'delivery_callbacks_outcome_check',
+      sql`outcome IN ('SUCCEEDED', 'FAILED')`,
+    ),
+    index('delivery_callbacks_delivery_received_idx').on(
+      table.deliveryId,
+      table.receivedAt,
+    ),
+  ],
+);
+
+export type DeliveryCallback = typeof deliveryCallbacks.$inferSelect;
+export type NewDeliveryCallback = typeof deliveryCallbacks.$inferInsert;

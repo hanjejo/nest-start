@@ -11,6 +11,7 @@ import { StoreManagementModule } from '../store-management/store-management.modu
 import { UserModule } from '../user/user.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { PaymentModule } from '../payment/payment.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PaymentModule } from '../payment/payment.module';
     UserModule,
     MessagingModule,
     PaymentModule,
+    DeliveryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
