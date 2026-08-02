@@ -30,6 +30,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Redis is a non-authoritative performance layer for Catalog cache, rate limits, and short-lived temporary values; business state, authentication sessions, and event deduplication remain in PostgreSQL.
 - Local `kind` secrets use encrypted `SOPS + age` manifests; AWS uses External Secrets Operator with AWS Secrets Manager, and plaintext Secrets never enter Git.
 - Kubernetes `Service` and CoreDNS provide Service Discovery; internal dependencies use `ClusterIP` DNS, external HTTP uses Ingress or Gateway, and every workload defines Readiness and Liveness Probes.
+- GitOps desired state lives in this Nx repository under `deploy/k8s`, with shared `base` manifests and `local`, `staging`, and `production` overlays; Argo CD watches an environment overlay, and promotion happens through Git changes.
 - RabbitMQ is the Integration Event transport; PostgreSQL Outbox remains the canonical event record, and consumers acknowledge messages only after Inbox and state changes commit.
 - RabbitMQ uses one durable `integration.events` topic exchange, Context-specific durable queues, Event Type routing keys, TTL retry queues, and Context-specific Dead Letter Queues.
 - Events have two layers: transaction-scoped domain events and cross-context integration events.
@@ -48,5 +49,4 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 ## Still unresolved
 
 - LGTM retention, dashboards, and alert rules.
-- GitOps repository layout and environment overlays.
 - Local runtime and infrastructure scope.
