@@ -15,6 +15,7 @@ export const RBAC_PERMISSIONS = {
   PAYMENT_READ_OWN: 'payment.read.own',
   PAYMENT_READ_STORE: 'payment.read.store',
   PAYMENT_ATTEMPT_OWN: 'payment.attempt.own',
+  SETTLEMENT_READ_STORE: 'settlement.read.store',
   STORE_SCOPE_READ: 'store.scope.read',
   STORE_SCOPE_MANAGE: 'store.scope.manage',
   CATALOG_READ: 'catalog.read',

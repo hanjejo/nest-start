@@ -184,6 +184,7 @@ describe('Store-scoped RBAC (e2e)', () => {
       'rbac.assignment.write',
       'rbac.catalog.read',
       'rbac.catalog.write',
+      'settlement.read.store',
       'store.directory.read',
       'store.operations.manage',
       'store.scope.manage',

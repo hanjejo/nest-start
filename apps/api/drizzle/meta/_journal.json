@@ -64,6 +64,13 @@
       "when": 1785679746092,
       "tag": "0008_elite_inhumans",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785680603553,
+      "tag": "0009_solid_justice",
+      "breakpoints": true
     }
   ]
 }

@@ -1058,3 +1058,322 @@ export const deliveryCallbacks = pgTable(
 
 export type DeliveryCallback = typeof deliveryCallbacks.$inferSelect;
 export type NewDeliveryCallback = typeof deliveryCallbacks.$inferInsert;
+
+export const settlementStatuses = ['PENDING', 'ELIGIBLE', 'RECORDED'] as const;
+export type SettlementStatus = (typeof settlementStatuses)[number];
+
+export const settlementOrderFactStatuses = ['COMPLETED'] as const;
+export type SettlementOrderFactStatus =
+  (typeof settlementOrderFactStatuses)[number];
+
+export const settlementLedgerEntryTypes = [
+  'GROSS',
+  'FEE',
+  'REFUND',
+  'ADJUSTMENT',
+] as const;
+export type SettlementLedgerEntryType =
+  (typeof settlementLedgerEntryTypes)[number];
+
+export const settlementOrderFacts = pgTable(
+  'settlement_order_facts',
+  {
+    orderId: uuid('order_id').primaryKey(),
+    storeId: uuid('store_id').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    status: text('status')
+      .$type<SettlementOrderFactStatus>()
+      .notNull()
+      .default('COMPLETED'),
+    completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
+    eventId: text('event_id').notNull().unique(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    aggregateVersion: integer('aggregate_version'),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'settlement_order_facts_amount_minor_check',
+      sql`amount_minor >= 0 AND amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlement_order_facts_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check('settlement_order_facts_status_check', sql`status IN ('COMPLETED')`),
+    check(
+      'settlement_order_facts_aggregate_version_check',
+      sql`aggregate_version IS NULL OR aggregate_version > 0`,
+    ),
+    index('settlement_order_facts_store_idx').on(table.storeId),
+  ],
+);
+
+export type SettlementOrderFact = typeof settlementOrderFacts.$inferSelect;
+export type NewSettlementOrderFact = typeof settlementOrderFacts.$inferInsert;
+
+export const settlementPaymentFacts = pgTable(
+  'settlement_payment_facts',
+  {
+    paymentIntentId: uuid('payment_intent_id').primaryKey(),
+    orderId: uuid('order_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    providerReference: text('provider_reference').notNull(),
+    eventId: text('event_id').notNull().unique(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    aggregateVersion: integer('aggregate_version'),
+    succeededAt: timestamp('succeeded_at', {
+      withTimezone: true,
+    }).notNull(),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('settlement_payment_facts_order_id_unique').on(table.orderId),
+    check(
+      'settlement_payment_facts_amount_minor_check',
+      sql`amount_minor >= 0 AND amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlement_payment_facts_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check(
+      'settlement_payment_facts_aggregate_version_check',
+      sql`aggregate_version IS NULL OR aggregate_version > 0`,
+    ),
+    index('settlement_payment_facts_order_idx').on(table.orderId),
+    index('settlement_payment_facts_store_idx').on(table.storeId),
+  ],
+);
+
+export type SettlementPaymentFact = typeof settlementPaymentFacts.$inferSelect;
+export type NewSettlementPaymentFact =
+  typeof settlementPaymentFacts.$inferInsert;
+
+export const settlementRefundFacts = pgTable(
+  'settlement_refund_facts',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    paymentIntentId: uuid('payment_intent_id').notNull(),
+    orderId: uuid('order_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    refundAmountMinor: integer('refund_amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    providerReference: text('provider_reference').notNull(),
+    eventId: text('event_id').notNull().unique(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('settlement_refund_facts_payment_reference_unique').on(
+      table.paymentIntentId,
+      table.providerReference,
+    ),
+    check(
+      'settlement_refund_facts_amount_check',
+      sql`refund_amount_minor > 0 AND refund_amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlement_refund_facts_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    index('settlement_refund_facts_order_idx').on(table.orderId),
+    index('settlement_refund_facts_payment_idx').on(table.paymentIntentId),
+  ],
+);
+
+export type SettlementRefundFact = typeof settlementRefundFacts.$inferSelect;
+export type NewSettlementRefundFact = typeof settlementRefundFacts.$inferInsert;
+
+export const settlementCancellationFacts = pgTable(
+  'settlement_cancellation_facts',
+  {
+    orderId: uuid('order_id').primaryKey(),
+    storeId: uuid('store_id').notNull(),
+    reason: text('reason').notNull(),
+    refundRequired: boolean('refund_required').notNull(),
+    eventId: text('event_id').notNull().unique(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('settlement_cancellation_facts_store_idx').on(table.storeId),
+  ],
+);
+
+export type SettlementCancellationFact =
+  typeof settlementCancellationFacts.$inferSelect;
+export type NewSettlementCancellationFact =
+  typeof settlementCancellationFacts.$inferInsert;
+
+export const settlements = pgTable(
+  'settlements',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    orderId: uuid('order_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    status: text('status')
+      .$type<SettlementStatus>()
+      .notNull()
+      .default('PENDING'),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    feeBasisPoints: integer('fee_basis_points').notNull().default(250),
+    grossAmountMinor: integer('gross_amount_minor'),
+    paymentAmountMinor: integer('payment_amount_minor'),
+    feeAmountMinor: integer('fee_amount_minor').notNull().default(0),
+    refundAmountMinor: integer('refund_amount_minor').notNull().default(0),
+    adjustmentAmountMinor: integer('adjustment_amount_minor')
+      .notNull()
+      .default(0),
+    payableAmountMinor: integer('payable_amount_minor').notNull().default(0),
+    aggregateVersion: integer('aggregate_version').notNull().default(1),
+    workflowGeneration: integer('workflow_generation').notNull().default(1),
+    correlationId: text('correlation_id').notNull(),
+    causationId: text('causation_id'),
+    eligibleAt: timestamp('eligible_at', { withTimezone: true }),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('settlements_order_id_unique').on(table.orderId),
+    check(
+      'settlements_status_check',
+      sql`status IN ('PENDING', 'ELIGIBLE', 'RECORDED')`,
+    ),
+    check(
+      'settlements_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    check(
+      'settlements_fee_basis_points_check',
+      sql`fee_basis_points >= 0 AND fee_basis_points <= 10000`,
+    ),
+    check(
+      'settlements_gross_amount_check',
+      sql`gross_amount_minor IS NULL OR (gross_amount_minor >= 0 AND gross_amount_minor <= 2147483647)`,
+    ),
+    check(
+      'settlements_payment_amount_check',
+      sql`payment_amount_minor IS NULL OR (payment_amount_minor >= 0 AND payment_amount_minor <= 2147483647)`,
+    ),
+    check(
+      'settlements_fee_amount_check',
+      sql`fee_amount_minor >= 0 AND fee_amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlements_refund_amount_check',
+      sql`refund_amount_minor >= 0 AND refund_amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlements_adjustment_amount_check',
+      sql`adjustment_amount_minor >= -2147483647 AND adjustment_amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlements_payable_amount_check',
+      sql`payable_amount_minor >= 0 AND payable_amount_minor <= 2147483647`,
+    ),
+    check('settlements_aggregate_version_check', sql`aggregate_version > 0`),
+    check(
+      'settlements_workflow_generation_check',
+      sql`workflow_generation > 0`,
+    ),
+    check(
+      'settlements_recorded_at_check',
+      sql`status <> 'RECORDED' OR recorded_at IS NOT NULL`,
+    ),
+    index('settlements_store_status_created_idx').on(
+      table.storeId,
+      table.status,
+      table.createdAt,
+    ),
+    index('settlements_status_idx').on(table.status),
+    index('settlements_order_idx').on(table.orderId),
+  ],
+);
+
+export type Settlement = typeof settlements.$inferSelect;
+export type NewSettlement = typeof settlements.$inferInsert;
+
+export const settlementLedgerEntries = pgTable(
+  'settlement_ledger_entries',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    settlementId: uuid('settlement_id')
+      .notNull()
+      .references(() => settlements.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id').notNull(),
+    storeId: uuid('store_id').notNull(),
+    entryType: text('entry_type').$type<SettlementLedgerEntryType>().notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    sourceEventId: text('source_event_id'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      'settlement_ledger_entries_type_check',
+      sql`entry_type IN ('GROSS', 'FEE', 'REFUND', 'ADJUSTMENT')`,
+    ),
+    check(
+      'settlement_ledger_entries_amount_check',
+      sql`amount_minor >= -2147483647 AND amount_minor <= 2147483647`,
+    ),
+    check(
+      'settlement_ledger_entries_currency_check',
+      sql`currency = upper(currency) AND currency <> ''`,
+    ),
+    index('settlement_ledger_entries_settlement_created_idx').on(
+      table.settlementId,
+      table.createdAt,
+    ),
+    index('settlement_ledger_entries_store_created_idx').on(
+      table.storeId,
+      table.createdAt,
+    ),
+    index('settlement_ledger_entries_order_idx').on(table.orderId),
+  ],
+);
+
+export type SettlementLedgerEntry = typeof settlementLedgerEntries.$inferSelect;
+export type NewSettlementLedgerEntry =
+  typeof settlementLedgerEntries.$inferInsert;
