@@ -16,6 +16,7 @@ Context boundaries are not authoritative yet. `/wayfinder` and `/domain-modeling
 - Ordering cannot access Payment tables directly; it communicates through commands and integration events.
 - Delivery owns one delivery per order, including the address snapshot and delivery state; v1 uses manual or simulated status changes behind a `DeliveryProvider` port.
 - Identity and Access uses email/password credentials, short-lived access tokens, refresh-token rotation, and server-side refresh sessions that can be revoked on logout.
+- Logout revokes the current PostgreSQL Refresh Session and clears the client token; Access Tokens remain short-lived, and logout-all revokes every Refresh Session without requiring a Redis denylist.
 - Identity and Access owns roles, permissions, and assignments: `customer`, `store-operator`, `store-admin`, and `platform-admin`.
 - Store operator and store admin permissions are scoped by `Store ID`; platform admin permissions are global, and APIs authorize by permission rather than role name.
 - Ordering owns `AWAITING_PAYMENT`, `CONFIRMED`, `PREPARING`, `READY_FOR_DELIVERY`, `DELIVERING`, `COMPLETED`, and `CANCELLED`; Payment, Delivery, and Settlement own their own state machines.
